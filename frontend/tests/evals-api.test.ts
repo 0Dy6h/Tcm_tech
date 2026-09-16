@@ -9,7 +9,7 @@ import {
 } from "../lib/api/evals";
 
 test("buildRagAdEvalReportUrl returns rag eval report endpoint", () => {
-  assert.equal(buildRagAdEvalReportUrl(), "http://127.0.0.1:8000/api/evals/rag-ad/report");
+  assert.equal(buildRagAdEvalReportUrl(), "http://127.0.0.1:8010/api/evals/rag-ad/report");
 });
 
 test("formatEvalPassRate formats ratio as percentage", () => {
@@ -77,7 +77,7 @@ test("getRagAdEvalReport fetches report payload", async () => {
     const { getRagAdEvalReport } = await import(`../lib/api/evals?ts=${Date.now()}`);
     const report = await getRagAdEvalReport();
 
-    assert.equal(captured[0].url, "http://127.0.0.1:8000/api/evals/rag-ad/report");
+    assert.equal(captured[0].url, "http://127.0.0.1:8010/api/evals/rag-ad/report");
     const headers = captured[0].init?.headers as Record<string, string>;
     assert.equal("X-Access-Token" in headers, false);
     assert.equal(report.summary.total_questions, 50);

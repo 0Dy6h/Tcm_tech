@@ -82,20 +82,20 @@ cd backend
 
 ```powershell
 cd backend
-& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py
+& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010
 ```
 
 健康检查：
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8010/health
 ```
 
 访问控制（可选，A2）：
 
 - 默认 `QIYAN_ACCESS_TOKENS` 未设置时全部接口开放（dev 模式）。
 - 设置后所有非 `/health` 与非 OPTIONS preflight 请求必须带 `X-Access-Token` 请求头匹配白名单，否则返回 401。
-- 示例：`$env:QIYAN_ACCESS_TOKENS="dev-token-1,internal-reviewer-2"; & .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py`，调用方需 `curl -H "X-Access-Token: dev-token-1" http://127.0.0.1:8000/api/literature/search?q=AD`。
+- 示例：`$env:QIYAN_ACCESS_TOKENS="dev-token-1,internal-reviewer-2"; & .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010`，调用方需 `curl -H "X-Access-Token: dev-token-1" http://127.0.0.1:8010/api/literature/search?q=AD`。
 - `X-Access-Token` 只证明请求来自可信内部通道，不代表 reviewer 身份。network task 等 owner-bound endpoint 在 protected mode 还要求 `X-Qiyan-Reviewer`；云端由 nginx 用 Basic Auth 的 `$remote_user` 覆盖注入，本地 token smoke 使用固定 `preview-smoke`。不要让浏览器 body、query 参数或公开环境变量决定 owner。
 - 前端不会读取或注入后端 token。任何 `NEXT_PUBLIC_*` 都会进入浏览器 bundle，不能承载访问凭证；本地浏览器开发使用 open mode，云端试用按 `docs/guides/cloud-trial-deployment-runbook.md` 由 nginx Basic Auth 鉴别 reviewer，并由 nginx 在反代层注入后端内部 token。
 - `frontend/lib/api/client.ts` 只合并调用方业务 header；multipart PDF 上传仍不手写 `Content-Type`，避免破坏浏览器生成的 boundary。
@@ -135,7 +135,7 @@ curl http://127.0.0.1:8000/health
 文献检索 API：
 
 ```bash
-curl "http://127.0.0.1:8000/api/literature/search?q=特应性皮炎"
+curl "http://127.0.0.1:8010/api/literature/search?q=特应性皮炎"
 ```
 
 支持参数：
@@ -150,8 +150,8 @@ curl "http://127.0.0.1:8000/api/literature/search?q=特应性皮炎"
 示例：
 
 ```bash
-curl "http://127.0.0.1:8000/api/literature/search?q=瘙痒&source=cn_literature&page=1&page_size=5&sort=relevance"
-curl "http://127.0.0.1:8000/api/literature/search?q=特应性皮炎&has_pdf_upload=true"
+curl "http://127.0.0.1:8010/api/literature/search?q=瘙痒&source=cn_literature&page=1&page_size=5&sort=relevance"
+curl "http://127.0.0.1:8010/api/literature/search?q=特应性皮炎&has_pdf_upload=true"
 ```
 
 返回字段保留 `query`、`total`、`items`，并新增 `source`、`page`、`page_size`、`total_pages`、`sort`，用于前端分页、排序和数据来源视图展示。`items[*].record_origin` 用于区分 `seed_sample` 演示样本与 `pubmed_live` 实时同步记录。
@@ -159,13 +159,13 @@ curl "http://127.0.0.1:8000/api/literature/search?q=特应性皮炎&has_pdf_uplo
 文献详情 API：
 
 ```bash
-curl "http://127.0.0.1:8000/api/literature/cn-ad-gbs-001"
+curl "http://127.0.0.1:8010/api/literature/cn-ad-gbs-001"
 ```
 
 PDF upload API（本地文件存储 + 自动关联 literature metadata；默认返回 pending）：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/uploads/pdf" \
+curl -X POST "http://127.0.0.1:8010/api/uploads/pdf" \
   -F "literature_id=cn-ad-gbs-001" \
   -F "file=@/absolute/path/to/ad-evidence.pdf;type=application/pdf"
 ```
@@ -173,16 +173,16 @@ curl -X POST "http://127.0.0.1:8000/api/uploads/pdf" \
 PDF download/preview API（本地对象存储 mock）：
 
 ```bash
-curl -L "http://127.0.0.1:8000/api/uploads/pdf/pdf-cn-ad-gbs-001-ad-evidence-pdf" \
+curl -L "http://127.0.0.1:8010/api/uploads/pdf/<pdf_upload_id>" \
   -o ad-evidence.pdf
 ```
 
-说明：upload endpoint 负责落盘与写入 `pending`；独立 auto-parse endpoint 负责推进 parse 状态，并补充 `pdf_parse_message`、`pdf_parse_started_at`、`pdf_parse_finished_at`、`last_parse_trigger`、`parse_attempt_count` 与 `pdf_parse_result`。解析成功后会向 runtime chunk 状态补充 `source_type=uploaded_pdf` 的 chunk，使上传 PDF 的解析片段可进入 RAG 检索与 citation cards。
+说明：实际上传按文献 ID、原始文件名与 PDF 字节 SHA-256 生成有界的不可变 `pdf_upload_id`；下载时使用上传响应中的 ID，不从文件名推导。重复同名上传不会改写既有引用对应的 PDF。上传先校验 PDF 字节签名（不等于完整格式/内容审核），再原子落盘并写入 `pending`；独立 auto-parse endpoint 接受可选 `pdf_upload_id`，前端始终传入当前 ID；过期请求或解析期间替换上传返回 409，保持新文件为 pending。该端点负责推进 parse 状态，并补充 `pdf_parse_message`、`pdf_parse_started_at`、`pdf_parse_finished_at`、`last_parse_trigger`、`parse_attempt_count` 与 `pdf_parse_result`。解析成功后会向 runtime chunk 状态补充 `source_type=uploaded_pdf` 的 chunk，使上传 PDF 的解析片段可进入 RAG 检索与 citation cards。
 
 Auto-parse API：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/uploads/pdf/auto-parse" \
+curl -X POST "http://127.0.0.1:8010/api/uploads/pdf/auto-parse" \
   -H "Content-Type: application/json" \
   -d '{"literature_id":"cn-ad-gbs-001","file_name":"ad-evidence.pdf"}'
 ```
@@ -190,7 +190,7 @@ curl -X POST "http://127.0.0.1:8000/api/uploads/pdf/auto-parse" \
 PDF metadata attach API（backend-only）：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/literature/pdf-metadata" \
+curl -X POST "http://127.0.0.1:8010/api/literature/pdf-metadata" \
   -H "Content-Type: application/json" \
   -d '{"literature_id":"cn-ad-gbs-001","file_name":"ad-evidence.pdf","source_type":"uploaded_pdf"}'
 ```
@@ -198,7 +198,7 @@ curl -X POST "http://127.0.0.1:8000/api/literature/pdf-metadata" \
 PDF parse status API（backend-only）：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/literature/pdf-parse-status" \
+curl -X POST "http://127.0.0.1:8010/api/literature/pdf-parse-status" \
   -H "Content-Type: application/json" \
   -d '{"literature_id":"cn-ad-gbs-001","pdf_parse_status":"parsed"}'
 ```
@@ -206,7 +206,7 @@ curl -X POST "http://127.0.0.1:8000/api/literature/pdf-parse-status" \
 RAG API：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/rag/answer" \
+curl -X POST "http://127.0.0.1:8010/api/rag/answer" \
   -H "Content-Type: application/json" \
   -d '{"question":"特应性皮炎和肠-脑-皮肤轴有什么关系？","source":"all","top_k":2}'
 ```
@@ -216,11 +216,11 @@ curl -X POST "http://127.0.0.1:8000/api/rag/answer" \
 RAG 导出 API：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/rag/answer/export" \
+curl -X POST "http://127.0.0.1:8010/api/rag/answer/export" \
   -H "Content-Type: application/json" \
   -d @rag-answer.json
 
-curl -X POST "http://127.0.0.1:8000/api/rag/answer/export/docx" \
+curl -X POST "http://127.0.0.1:8010/api/rag/answer/export/docx" \
   -H "Content-Type: application/json" \
   -d @rag-answer.json \
   --output qiyan-rag-answer.docx
@@ -274,13 +274,13 @@ $env:QIYAN_LLM_PROVIDER="opencode_go"
 $env:QIYAN_OPENCODE_GO_API_KEY="<local-secret>"
 $env:QIYAN_OPENCODE_GO_MODEL="gpt-5.5"
 $env:QIYAN_OPENCODE_GO_MAX_TOKENS="4096"
-& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py
+& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010
 ```
 
 另开终端调用：
 
 ```powershell
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/rag/answer" `
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8010/api/rag/answer" `
   -ContentType "application/json" `
   -Body '{"question":"特应性皮炎和肠-脑-皮肤轴有什么关系？","source":"all","top_k":1}'
 ```
@@ -288,8 +288,8 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/rag/answer" `
 RAG eval API：
 
 ```bash
-curl "http://127.0.0.1:8000/api/evals/rag-ad/report"
-curl "http://127.0.0.1:8000/api/evals/rag-ad/report?corpus=runtime"
+curl "http://127.0.0.1:8010/api/evals/rag-ad/report"
+curl "http://127.0.0.1:8010/api/evals/rag-ad/report?corpus=runtime"
 ```
 
 当前评估报告基于 `backend/data/evals/rag_ad_eval_questions.json` 的 50 个特应性皮炎问题，调用 deterministic RAG 后返回 summary + item results。默认 `corpus=seed`，固定读取 tracked seed 文献/chunk，避免本地 uploaded PDF/runtime state 污染 benchmark；显式 `corpus=runtime` 才评估 `backend/data/runtime/` 本地状态。当前基线目标：50 题通过率保持内部基线，citation/chunk 命中、disclaimer coverage 与 must_not violations 以本地测试输出与最新 handoff 为准。
@@ -297,7 +297,7 @@ curl "http://127.0.0.1:8000/api/evals/rag-ad/report?corpus=runtime"
 Network pharmacology API（默认 mock，live 需显式 opt-in）：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/network/analyze" \
+curl -X POST "http://127.0.0.1:8010/api/network/analyze" \
   -H "Content-Type: application/json" \
   -d '{"query":"消风散","analysis_type":"formula","research_protocol":{"disease":"atopic_dermatitis","phenotype":"特应性皮炎伴2型炎症与皮肤屏障异常","species":"Homo sapiens","evidence_policy":"direct_human_first","query_date":"2026-07-11"}}'
 ```
@@ -305,15 +305,15 @@ curl -X POST "http://127.0.0.1:8000/api/network/analyze" \
 随后轮询：
 
 ```bash
-curl "http://127.0.0.1:8000/api/network/result/<task_id>"
-curl "http://127.0.0.1:8000/api/network/entities"
+curl "http://127.0.0.1:8010/api/network/result/<task_id>"
+curl "http://127.0.0.1:8010/api/network/entities"
 ```
 
 离线 Open Targets raw-artifact 核验需要 operator 预先配置 trusted manifest。PowerShell multipart 示例（`metadata.json` 内容必须与 manifest 中该 raw hash 的条目完全一致）：
 
 ```powershell
 $metadata = Get-Content -Raw C:\path\to\metadata.json
-curl.exe -X POST "http://127.0.0.1:8000/api/network/disease-import/verify" `
+curl.exe -X POST "http://127.0.0.1:8010/api/network/disease-import/verify" `
   -F "query=消风散" `
   -F "analysis_type=formula" `
   -F "evidence_policy=direct_human_first" `
@@ -326,7 +326,7 @@ curl.exe -X POST "http://127.0.0.1:8000/api/network/disease-import/verify" `
 ```powershell
 $compoundMetadata = Get-Content -Raw C:\path\to\chembl-metadata.json
 $sourceTaskId = "network-REPLACE_WITH_VERIFIED_DISEASE_TASK_ID"
-curl.exe -X POST "http://127.0.0.1:8000/api/network/compound-import/verify" `
+curl.exe -X POST "http://127.0.0.1:8010/api/network/compound-import/verify" `
   -F "source_task_id=$sourceTaskId" `
   --form-string "metadata=$compoundMetadata" `
   -F "file=@C:\path\to\chembl-known-activities.json;type=application/json"
@@ -338,7 +338,7 @@ ADR-0018 Gate 3 组学验证层（显式 opt-in，默认离线路径不含组学
 
 ```powershell
 $omicsManifest = Get-Content -Raw C:\path\to\omics-manifest.json
-curl.exe -X POST "http://127.0.0.1:8000/api/network/omics-import/verify" `
+curl.exe -X POST "http://127.0.0.1:8010/api/network/omics-import/verify" `
   --form-string "manifest=$omicsManifest" `
   -F "file=@C:\path\to\GSE32924_series_matrix.txt.gz;type=application/gzip" `
   -F "annotation_file=@C:\path\to\GPL570.annot.gz;type=application/gzip"
@@ -349,21 +349,21 @@ curl.exe -X POST "http://127.0.0.1:8000/api/network/omics-import/verify" `
 writer 消费契约（2026-09-06 落地，契约见 `docs/plans/2026-08-14-writer-consumption-contract-draft.md`）：所有 lineage 行终态判定后 `POST /api/network/result/{task_id}/assembly-plans` 封存候选计划；未来的网络装配 writer 写任何产物前必须走一次性消费原语 `POST /api/network/result/{task_id}/assembly-plans/{plan_id}/consume`——服务端在同一临界区内原子重验 R1-R9（plan 仍是 latest、判定流与冻结 lineage 绑定未变、父子协议成立）并追加不可变输出信封与 exactly-once 消费记录。同 writer 同输出重试返回 `200 existing`（幂等重放）；判定追加未重封存报 `409 adjudication_changed`；已重封存报 `409 plan_superseded`；持久化哈希自相矛盾报 `500 assembly_integrity_failed`；容量上限（env `QIYAN_CONSUMPTION_RECORD_LIMIT`，默认 1000）报 `429`。响应信封如实标注 `backend_fidelity`（JSON=`preview` 仅同进程同实例安全，SQLite/PG=`production`）。消费成功不等于科研就绪：`formal_network_ready` 恒 false，输出只是审计产物。
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/network/result/<task_id>/assembly-plans/<plan_id>/consume" \
+curl -X POST "http://127.0.0.1:8010/api/network/result/<task_id>/assembly-plans/<plan_id>/consume" \
   -H "Content-Type: application/json" \
   -d '{"writer_id":"assembly-writer-01","output_payload":{"edges":[]}}'
-curl "http://127.0.0.1:8000/api/network/result/<task_id>/assembly-plans/<plan_id>"  # 只读审计视图：is_latest_plan / is_consumed / is_superseded_by
+curl "http://127.0.0.1:8010/api/network/result/<task_id>/assembly-plans/<plan_id>"  # 只读审计视图：is_latest_plan / is_consumed / is_superseded_by
 ```
 
 protected mode 直连脚本必须在创建、轮询和报告请求中保持同一个 reviewer id：
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/api/network/analyze" \
+curl -X POST "http://127.0.0.1:8010/api/network/analyze" \
   -H "X-Access-Token: dev-token-1" \
   -H "X-Qiyan-Reviewer: reviewer-a" \
   -H "Content-Type: application/json" \
   -d '{"query":"消风散","analysis_type":"formula","research_protocol":{"disease":"atopic_dermatitis","phenotype":"特应性皮炎伴2型炎症与皮肤屏障异常","species":"Homo sapiens","evidence_policy":"direct_human_first","query_date":"2026-07-11"}}'
-curl "http://127.0.0.1:8000/api/network/result/<task_id>" \
+curl "http://127.0.0.1:8010/api/network/result/<task_id>" \
   -H "X-Access-Token: dev-token-1" \
   -H "X-Qiyan-Reviewer: reviewer-a"
 ```
@@ -414,23 +414,23 @@ cd backend
 $env:QIYAN_NETWORK_DATA_PROVIDER="live"
 $env:QIYAN_NETWORK_CACHE_DIR="data/runtime/network_cache"
 $env:QIYAN_NETWORK_TARGET_PREDICTION_FILE="C:\path\to\network-target-predictions.csv"
-& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py
+& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010
 ```
 
 另开终端轮询：
 
 ```powershell
-$task = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/network/analyze" `
+$task = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8010/api/network/analyze" `
   -ContentType "application/json" `
   -Body '{"query":"黄芪","analysis_type":"herb","research_protocol":{"disease":"atopic_dermatitis","phenotype":"特应性皮炎伴2型炎症与皮肤屏障异常","species":"Homo sapiens","evidence_policy":"direct_human_first","query_date":"2026-07-11"}}'
 
 do {
-  $result = Invoke-RestMethod "http://127.0.0.1:8000/api/network/result/$($task.task_id)"
+  $result = Invoke-RestMethod "http://127.0.0.1:8010/api/network/result/$($task.task_id)"
   if ($result.status -in @("queued", "running")) { Start-Sleep -Milliseconds 250 }
 } while ($result.status -in @("queued", "running"))
 
 if ($result.status -eq "completed") {
-  Invoke-RestMethod "http://127.0.0.1:8000/api/network/result/$($task.task_id)/report"
+  Invoke-RestMethod "http://127.0.0.1:8010/api/network/result/$($task.task_id)/report"
 } else {
   throw "Network task failed: $($result.error)"
 }
@@ -506,15 +506,15 @@ pnpm dev
 
 ```powershell
 pnpm dev            # 等价于 cd frontend && pnpm dev，起 http://localhost:3000
-pnpm dev:backend    # 等价于在 backend/ 起 uvicorn，http://127.0.0.1:8000
+pnpm dev:backend    # 等价于在 backend/ 起 uvicorn，http://127.0.0.1:8010
 ```
 
-注意：在仓库根目录直接执行 `pnpm dev` 以外的 frontend 子命令（如 `pnpm build`）同样需要 `cd frontend`，或使用上面根目录的同名转发脚本；根目录本身不是 Next.js 应用。浏览器完整体验需要前后端同时在线：前端 `:3000` 渲染页面壳，文献/RAG/网络数据来自后端 `:8000`。一键同时起两侧的脚本是 `.\scripts\run-internal-preview.ps1`（停止用 `-Stop`）。
+注意：在仓库根目录直接执行 `pnpm dev` 以外的 frontend 子命令（如 `pnpm build`）同样需要 `cd frontend`，或使用上面根目录的同名转发脚本；根目录本身不是 Next.js 应用。浏览器完整体验需要前后端同时在线：前端 `:3000` 渲染页面壳，文献/RAG/网络数据来自后端 `:8010`。一键同时起两侧的脚本是 `.\scripts\run-internal-preview.ps1`（停止用 `-Stop`）。
 
-前端 API 地址默认是 `http://127.0.0.1:8000`。如需覆盖：
+前端 API 地址默认是 `http://127.0.0.1:8010`。如需覆盖：
 
 ```powershell
-$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8000"
+$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8010"
 cd frontend
 pnpm dev
 ```

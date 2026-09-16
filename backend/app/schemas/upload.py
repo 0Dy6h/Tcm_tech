@@ -14,3 +14,4 @@ class StoredUpload(BaseModel):
 class FakePdfAutoParseRequest(BaseModel):
     literature_id: str = Field(min_length=1)
     file_name: str = Field(min_length=1)
+    pdf_upload_id: str | None = Field(default=None, min_length=1, max_length=104)

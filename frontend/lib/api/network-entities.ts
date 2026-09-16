@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { ApiStatusError, apiFetch } from "./client";
 import { getBackendBaseUrl } from "./rag";
 
 export type EntityKind = "herb" | "formula" | "compound" | "target" | "pathway";
@@ -57,15 +57,22 @@ export async function fetchNetworkEntities(): Promise<NetworkEntitiesLookup> {
   if (cachedLookupPromise) {
     return cachedLookupPromise;
   }
-  cachedLookupPromise = (async () => {
+  const pending = (async () => {
     const response = await apiFetch(buildNetworkEntitiesUrl());
     if (!response.ok) {
-      throw new Error("Network entities request failed");
+      throw new ApiStatusError(response.status, "Network entities request failed");
     }
     const raw = (await response.json()) as RawEntitiesPayload;
     return buildLookup(raw);
   })();
-  return cachedLookupPromise;
+  cachedLookupPromise = pending;
+  try {
+    return await pending;
+  } catch (error) {
+    // Retain successful lookups, but let a later page retry a failed request.
+    if (cachedLookupPromise === pending) cachedLookupPromise = null;
+    throw error;
+  }
 }
 
 export function resetNetworkEntitiesCache() {

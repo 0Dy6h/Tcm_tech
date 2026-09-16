@@ -52,11 +52,17 @@ def upload_pdf_metadata_endpoint(request: PdfMetadataUploadRequest = Body()) -> 
 def update_pdf_parse_status_endpoint(
     request: PdfParseStatusUpdateRequest = Body(),
 ) -> LiteratureItem:
-    status, item = update_pdf_parse_status(request.literature_id, request.pdf_parse_status)
+    status, item = update_pdf_parse_status(
+        request.literature_id,
+        request.pdf_parse_status,
+        expected_pdf_upload_id=request.pdf_upload_id,
+    )
     if status == "not_found":
         raise HTTPException(status_code=404, detail="Literature item not found")
     if status == "missing_metadata":
         raise HTTPException(status_code=409, detail="PDF metadata not attached")
+    if status == "conflict":
+        raise HTTPException(status_code=409, detail="PDF upload changed; reload the current PDF")
     assert item is not None
     return item
 

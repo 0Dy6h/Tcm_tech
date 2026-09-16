@@ -47,32 +47,32 @@ test("getBackendBaseUrl keeps browser requests on the public same-origin API URL
 test("buildLiteratureDetailUrl encodes item id with default backend base URL", () => {
   assert.equal(
     buildLiteratureDetailUrl("cn-ad-gbs-001"),
-    "http://127.0.0.1:8000/api/literature/cn-ad-gbs-001",
+    "http://127.0.0.1:8010/api/literature/cn-ad-gbs-001",
   );
 });
 
 test("buildLiteratureDetailUrl encodes reserved characters", () => {
   assert.equal(
     buildLiteratureDetailUrl("cn/ad gbs?001"),
-    "http://127.0.0.1:8000/api/literature/cn%2Fad%20gbs%3F001",
+    "http://127.0.0.1:8010/api/literature/cn%2Fad%20gbs%3F001",
   );
 });
 
 test("buildPdfUploadUrl points to upload endpoint on default backend base URL", () => {
-  assert.equal(buildPdfUploadUrl(), "http://127.0.0.1:8000/api/uploads/pdf");
+  assert.equal(buildPdfUploadUrl(), "http://127.0.0.1:8010/api/uploads/pdf");
 });
 
 test("buildPdfDownloadUrl points to stable uploaded PDF endpoint", () => {
   assert.equal(
     buildPdfDownloadUrl("pdf-cn-ad-gbs-001-review-pdf"),
-    "http://127.0.0.1:8000/api/uploads/pdf/pdf-cn-ad-gbs-001-review-pdf",
+    "http://127.0.0.1:8010/api/uploads/pdf/pdf-cn-ad-gbs-001-review-pdf",
   );
 });
 
 test("buildPdfDownloadUrl encodes reserved upload id characters", () => {
   assert.equal(
     buildPdfDownloadUrl("pdf-cn/ad gbs?001"),
-    "http://127.0.0.1:8000/api/uploads/pdf/pdf-cn%2Fad%20gbs%3F001",
+    "http://127.0.0.1:8010/api/uploads/pdf/pdf-cn%2Fad%20gbs%3F001",
   );
 });
 

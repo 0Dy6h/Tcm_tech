@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { describeApiError } from "../lib/api/client";
 import { fetchNetworkTasks } from "../lib/api/network";
 import { truncateLabel } from "../lib/format-text";
 import { mapNetworkTasksToRows, type NetworkTaskListRow } from "../lib/network-tasks";
@@ -28,6 +29,7 @@ export default function NetworkTaskListClient() {
   const [phase, setPhase] = useState<ListPhase>("loading");
   const [rows, setRows] = useState<NetworkTaskListRow[]>([]);
   const [reloadTick, setReloadTick] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -39,11 +41,12 @@ export default function NetworkTaskListClient() {
         setRows(mapNetworkTasksToRows(payload.tasks));
         setPhase("ready");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) {
           return;
         }
         setPhase("error");
+        setErrorMessage(describeApiError(error, "加载研究任务列表"));
       });
     return () => {
       cancelled = true;
@@ -57,7 +60,7 @@ export default function NetworkTaskListClient() {
   if (phase === "error") {
     return (
       <div style={{ display: "grid", gap: 12, justifyItems: "start" }}>
-        <StatusPanel message="加载研究任务列表失败，请确认后端服务已启动，然后重试。" tone="error" />
+        <StatusPanel message={errorMessage} tone="error" />
         <button
           type="button"
           onClick={() => {

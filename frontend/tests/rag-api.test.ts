@@ -10,11 +10,11 @@ import {
 } from "../lib/api/rag";
 
 test("buildRagAnswerUrl returns rag endpoint with default backend base URL", () => {
-  assert.equal(buildRagAnswerUrl(), "http://127.0.0.1:8000/api/rag/answer");
+  assert.equal(buildRagAnswerUrl(), "http://127.0.0.1:8010/api/rag/answer");
 });
 
 test("buildRagAnswerExportUrl returns rag export endpoint with default backend base URL", () => {
-  assert.equal(buildRagAnswerExportUrl(), "http://127.0.0.1:8000/api/rag/answer/export");
+  assert.equal(buildRagAnswerExportUrl(), "http://127.0.0.1:8010/api/rag/answer/export");
 });
 
 test("buildRagAnswerRequest trims question and preserves source/top_k", () => {
@@ -148,7 +148,7 @@ test("fetchRagAnswerMarkdown posts answer payload and returns markdown text", as
     const markdown = await fetchRagAnswerMarkdown(_EXPORT_SAMPLE);
 
     assert.equal(captured.length, 1);
-    assert.equal(captured[0].url, "http://127.0.0.1:8000/api/rag/answer/export");
+    assert.equal(captured[0].url, "http://127.0.0.1:8010/api/rag/answer/export");
     assert.equal(captured[0].init?.method, "POST");
     const headers = captured[0].init?.headers as Record<string, string>;
     assert.equal(headers["Content-Type"], "application/json");

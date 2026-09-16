@@ -36,7 +36,7 @@ import {
   getNetworkAdjudicationInFlightMessage,
   getNetworkAdjudicationUnavailableReason,
 } from "../lib/network-adjudication";
-import { ApiStatusError } from "../lib/api/client";
+import { ApiStatusError, describeApiError } from "../lib/api/client";
 import { toLocalDateInputValue } from "../lib/format-date";
 import { truncateLabel } from "../lib/format-text";
 import { parseNetworkTaskIdParam } from "../lib/network-tasks";
@@ -694,8 +694,8 @@ export default function NetworkAnalysisClient() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      setErrorMessage("导出报告失败，请稍后重试。");
+    } catch (error) {
+      setErrorMessage(describeApiError(error, "导出报告"));
       setPhase("error");
     }
   }
@@ -768,9 +768,9 @@ export default function NetworkAnalysisClient() {
         decision,
         reason,
       });
-    } catch {
+    } catch (error) {
       if (mountedRef.current && activeTaskIdRef.current === taskId) {
-        setAdjudicationError("提交人工判定失败，请确认任务已完成、该 lineage 行存在，然后重试。");
+        setAdjudicationError(describeApiError(error, "提交人工判定"));
       }
       releaseAdjudicationRow(rowId);
       return;
@@ -805,9 +805,11 @@ export default function NetworkAnalysisClient() {
     setAssemblyPlanError(null);
     try {
       await sealNetworkAssemblyPlan(taskId);
-    } catch {
+    } catch (error) {
       if (mountedRef.current && activeTaskIdRef.current === taskId) {
-        setAssemblyPlanError("装配输入仍被门禁阻塞；请完成全部逐行判定，并保留至少一条有双侧纳入依据的交集。");
+        setAssemblyPlanError(error instanceof ApiStatusError && error.status === 422
+          ? "装配输入仍被门禁阻塞；请完成全部逐行判定，并保留至少一条有双侧纳入依据的交集。"
+          : describeApiError(error, "封存候选装配输入"));
       }
       setAssemblyPlanBusy(false);
       return;

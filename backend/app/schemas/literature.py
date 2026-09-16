@@ -64,6 +64,7 @@ class PdfMetadataUploadRequest(BaseModel):
 class PdfParseStatusUpdateRequest(BaseModel):
     literature_id: str = Field(min_length=1)
     pdf_parse_status: Literal["parsed", "failed"]
+    pdf_upload_id: str | None = Field(default=None, min_length=1, max_length=104)
 
 
 class LiteratureSyncRequest(BaseModel):

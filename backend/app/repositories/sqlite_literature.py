@@ -278,6 +278,7 @@ class SqliteLiteratureRepository:
         pdf_parse_finished_at: str | None = None,
         pdf_parse_result: PdfParseResult | None = None,
         last_parse_trigger: str | None = None,
+        expected_pdf_upload_id: str | None = None,
     ) -> LiteratureItem | None:
         with self._lock:
             # Guard: must have pdf_upload_id and pdf_file_name
@@ -287,12 +288,17 @@ class SqliteLiteratureRepository:
             ).fetchone()
             if row is None or row["pdf_upload_id"] is None or row["pdf_file_name"] is None:
                 return None
+            if (
+                expected_pdf_upload_id is not None
+                and row["pdf_upload_id"] != expected_pdf_upload_id
+            ):
+                return None
 
             pr_json: str | None = None
             if pdf_parse_result is not None:
                 pr_json = json.dumps(pdf_parse_result.model_dump(), ensure_ascii=False)
 
-            self._conn.execute(
+            cursor = self._conn.execute(
                 """UPDATE literature
                    SET pdf_parse_status = ?,
                        pdf_parse_message = ?,
@@ -301,7 +307,8 @@ class SqliteLiteratureRepository:
                        pdf_parse_result = ?,
                        last_parse_trigger = ?,
                        parse_attempt_count = COALESCE(parse_attempt_count, 0) + 1
-                   WHERE id = ?""",
+                   WHERE id = ? AND pdf_upload_id = ? AND pdf_file_name = ?
+                   RETURNING *""",
                 (
                     pdf_parse_status,
                     pdf_parse_message,
@@ -310,10 +317,13 @@ class SqliteLiteratureRepository:
                     pr_json,
                     last_parse_trigger,
                     literature_id,
+                    row["pdf_upload_id"],
+                    row["pdf_file_name"],
                 ),
             )
+            updated = cursor.fetchone()
             self._conn.commit()
-            return self.get_item_by_id(literature_id)
+            return _row_to_item(updated) if updated is not None else None
 
     def bulk_upsert_pubmed_items(self, incoming_items: list[dict[str, Any]]) -> tuple[int, int]:
         with self._lock:

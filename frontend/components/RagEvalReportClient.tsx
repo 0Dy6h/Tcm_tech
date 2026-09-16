@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { describeApiError } from "../lib/api/client";
 import {
   formatEvalPassRate,
   getEvalItemStatusLabel,
@@ -64,11 +65,11 @@ export default function RagEvalReportClient() {
     try {
       const report = await getRagAdEvalReport();
       setState({ report, isLoading: false, error: null });
-    } catch {
+    } catch (error) {
       setState({
         report: null,
         isLoading: false,
-        error: "无法读取 RAG 评估报告，请确认后端服务已启动。",
+        error: describeApiError(error, "读取 RAG 评估报告"),
       });
     }
   }

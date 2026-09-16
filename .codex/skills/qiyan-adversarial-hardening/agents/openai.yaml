@@ -1,4 +1,0 @@
-interface:
-  display_name: "Qiyan Adversarial Hardening"
-  short_description: "Harden Qiyan security and research integrity boundaries"
-  default_prompt: "Use $qiyan-adversarial-hardening to audit and harden this Qiyan Nexus change from first principles."

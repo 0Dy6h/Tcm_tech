@@ -40,25 +40,25 @@ function buildRecord(overrides: Partial<NetworkAdjudicationRecord> = {}): Networ
 test("buildNetworkAdjudicationsUrl targets the task-scoped append-only collection", () => {
   assert.equal(
     buildNetworkAdjudicationsUrl("network-abc123abc123"),
-    "http://127.0.0.1:8000/api/network/result/network-abc123abc123/adjudications",
+    "http://127.0.0.1:8010/api/network/result/network-abc123abc123/adjudications",
   );
 });
 
 test("buildNetworkAdjudicationsUrl encodes a hostile task id instead of splitting the path", () => {
   assert.equal(
     buildNetworkAdjudicationsUrl("../../admin"),
-    "http://127.0.0.1:8000/api/network/result/..%2F..%2Fadmin/adjudications",
+    "http://127.0.0.1:8010/api/network/result/..%2F..%2Fadmin/adjudications",
   );
 });
 
 test("assembly plan URL is task-scoped and safely encoded", () => {
   assert.equal(
     buildNetworkAssemblyPlansUrl("network-abc123abc123"),
-    "http://127.0.0.1:8000/api/network/result/network-abc123abc123/assembly-plans",
+    "http://127.0.0.1:8010/api/network/result/network-abc123abc123/assembly-plans",
   );
   assert.equal(
     buildNetworkAssemblyPlansUrl("../../admin"),
-    "http://127.0.0.1:8000/api/network/result/..%2F..%2Fadmin/assembly-plans",
+    "http://127.0.0.1:8010/api/network/result/..%2F..%2Fadmin/assembly-plans",
   );
 });
 
@@ -269,7 +269,7 @@ test("a failed refresh after a successful write is never reported as a failed de
   const source = getSource("components/NetworkAnalysisClient.tsx");
 
   assert.match(source, /人工判定已记录，但刷新判定进度失败/);
-  assert.match(source, /提交人工判定失败/);
+  assert.match(source, /setAdjudicationError\(describeApiError\(error, "提交人工判定"\)\)/);
 });
 
 test("a superseded task's late response cannot paint over the task being viewed", () => {

@@ -47,14 +47,22 @@ def upsert_uploaded_pdf_chunk(item: LiteratureItem, file_name: str) -> None:
     )
 
 
-def auto_parse_uploaded_pdf(literature_id: str, file_name: str) -> LiteratureItem:
+def auto_parse_uploaded_pdf(
+    literature_id: str, file_name: str, pdf_upload_id: str | None = None
+) -> LiteratureItem:
     status, item = update_pdf_parse_status(
-        literature_id, resolve_fake_parse_status(file_name), trigger="auto"
+        literature_id,
+        resolve_fake_parse_status(file_name),
+        trigger="auto",
+        expected_pdf_upload_id=pdf_upload_id,
+        expected_file_name=file_name,
     )
     if status == "not_found":
         raise LookupError("Literature item not found")
     if status == "missing_metadata":
         raise ValueError("PDF metadata not attached")
+    if status == "conflict":
+        raise ValueError("PDF upload changed; reload the current PDF before parsing")
     if item is None:
         raise LookupError("Literature item not found")
     if item.pdf_parse_status == "parsed":

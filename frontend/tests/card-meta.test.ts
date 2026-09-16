@@ -33,6 +33,7 @@ test("getMetaRowStyle returns shared card meta layout", () => {
     fontSize: 13,
     fontWeight: 800,
     lineHeight: 1.6,
+    overflowWrap: "anywhere",
   });
 });
 

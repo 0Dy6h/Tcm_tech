@@ -14,7 +14,7 @@
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
     "antd": "^6.1.0",
-    "next": "^16.2.6",
+    "next": "16.3.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
@@ -28,7 +28,11 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss": "8.5.10"
+      "postcss": "8.5.23",
+      "sharp": "0.35.4",
+      "nanoid@^3.0.0": "3.3.18",
+      "baseline-browser-mapping": "2.11.0",
+      "esbuild": "0.28.1"
     }
   }
 }

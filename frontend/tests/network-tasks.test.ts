@@ -50,7 +50,7 @@ function buildTask(overrides: Partial<NetworkTaskSummary> = {}): NetworkTaskSumm
 }
 
 test("buildNetworkTasksUrl returns the owner-scoped task list endpoint", () => {
-  assert.equal(buildNetworkTasksUrl(), "http://127.0.0.1:8000/api/network/tasks");
+  assert.equal(buildNetworkTasksUrl(), "http://127.0.0.1:8010/api/network/tasks");
 });
 
 test("parseNetworkTaskIdParam keeps a real id and rejects blank or missing values", () => {

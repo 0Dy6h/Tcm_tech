@@ -8,7 +8,7 @@ import {
 } from "../lib/api/literature";
 
 test("buildLiteratureSyncUrl points to /api/literature/sync on default backend base URL", () => {
-  assert.equal(buildLiteratureSyncUrl(), "http://127.0.0.1:8000/api/literature/sync");
+  assert.equal(buildLiteratureSyncUrl(), "http://127.0.0.1:8010/api/literature/sync");
 });
 
 test("buildLiteratureSyncRequest trims query and clamps max_results to [1, 50]", () => {
@@ -48,7 +48,7 @@ test("syncLiteratureFromPubmed posts JSON body to sync endpoint and returns resp
     const result = await syncLiteratureFromPubmed("atopic dermatitis", 10);
 
     assert.equal(captured.length, 1);
-    assert.equal(captured[0].url, "http://127.0.0.1:8000/api/literature/sync");
+    assert.equal(captured[0].url, "http://127.0.0.1:8010/api/literature/sync");
     assert.equal(captured[0].init?.method, "POST");
     assert.equal(
       (captured[0].init?.headers as Record<string, string>)["Content-Type"],

@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { ApiStatusError, apiFetch } from "./client";
 import { getBackendBaseUrl, type RagSource } from "./rag";
 
 export type RagEvalSummary = {
@@ -56,7 +56,7 @@ export async function getRagAdEvalReport(): Promise<RagEvalReport> {
   const response = await apiFetch(buildRagAdEvalReportUrl());
 
   if (!response.ok) {
-    throw new Error("RAG AD eval report request failed");
+    throw new ApiStatusError(response.status, "RAG AD eval report request failed");
   }
 
   return response.json();

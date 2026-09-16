@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
+import { describeApiError } from "../lib/api/client";
 import {
   LITERATURE_SYNC_MAX_RESULTS_CAP,
   LiteratureItem,
@@ -86,12 +87,12 @@ export default function LiteraturePubmedSyncClient() {
     try {
       const result = await syncLiteratureFromPubmed(query, maxResults);
       setState({ query, maxResults, result, error: null, isLoading: false });
-    } catch {
+    } catch (error) {
       setState({
         query,
         maxResults,
         result: null,
-        error: "同步 PubMed 失败，请确认后端服务已启动且网络可达 NCBI。",
+        error: describeApiError(error, "同步 PubMed"),
         isLoading: false,
       });
     }

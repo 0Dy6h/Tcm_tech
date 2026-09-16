@@ -15,14 +15,14 @@ test("buildLiteratureSearchUrl encodes query with default backend base URL", () 
 
   assert.equal(
     url,
-    "http://127.0.0.1:8000/api/literature/search?q=%E7%89%B9%E5%BA%94%E6%80%A7%E7%9A%AE%E7%82%8E",
+    "http://127.0.0.1:8010/api/literature/search?q=%E7%89%B9%E5%BA%94%E6%80%A7%E7%9A%AE%E7%82%8E",
   );
 });
 
 test("buildLiteratureSearchUrl trims query", () => {
   const url = buildLiteratureSearchUrl("  AD  ");
 
-  assert.equal(url, "http://127.0.0.1:8000/api/literature/search?q=AD");
+  assert.equal(url, "http://127.0.0.1:8010/api/literature/search?q=AD");
 });
 
 test("buildLiteratureSearchUrl appends non-default search contract params", () => {
@@ -30,7 +30,7 @@ test("buildLiteratureSearchUrl appends non-default search contract params", () =
 
   assert.equal(
     url,
-    "http://127.0.0.1:8000/api/literature/search?q=AD&source=pubmed&page=2&page_size=5&sort=year_asc",
+    "http://127.0.0.1:8010/api/literature/search?q=AD&source=pubmed&page=2&page_size=5&sort=year_asc",
   );
 });
 
@@ -44,19 +44,19 @@ test("buildLiteratureSearchUrl appends has_pdf_upload when set", () => {
   const onlyUploaded = buildLiteratureSearchUrl("AD", "all", 1, 10, "relevance", true);
   assert.equal(
     onlyUploaded,
-    "http://127.0.0.1:8000/api/literature/search?q=AD&has_pdf_upload=true",
+    "http://127.0.0.1:8010/api/literature/search?q=AD&has_pdf_upload=true",
   );
 
   const excludingUploaded = buildLiteratureSearchUrl("AD", "all", 1, 10, "relevance", false);
   assert.equal(
     excludingUploaded,
-    "http://127.0.0.1:8000/api/literature/search?q=AD&has_pdf_upload=false",
+    "http://127.0.0.1:8010/api/literature/search?q=AD&has_pdf_upload=false",
   );
 });
 
 test("buildLiteratureSearchUrl omits has_pdf_upload when undefined", () => {
   const url = buildLiteratureSearchUrl("AD", "all", 1, 10, "relevance", undefined);
-  assert.equal(url, "http://127.0.0.1:8000/api/literature/search?q=AD");
+  assert.equal(url, "http://127.0.0.1:8010/api/literature/search?q=AD");
 });
 
 test("getLiteratureDataSourceLabel surfaces compliance-friendly copy for the 4 views", () => {

@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { describeApiError } from "../lib/api/client";
 import {
   getLiteratureDataSourceFilter,
   getPdfParseStatusLabel,
@@ -51,6 +52,7 @@ export default function LiteratureSearchClient() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q")?.trim() || "特应性皮炎";
   const appliedQueryRef = useRef<string | null>(null);
+  const searchRequestRef = useRef<AbortController | null>(null);
   const [state, setState] = useState<SearchState>({
     query: initialQuery,
     view: "all",
@@ -74,6 +76,9 @@ export default function LiteratureSearchClient() {
     pageSize: number,
     sort: LiteratureSearchSort,
   ) {
+    searchRequestRef.current?.abort();
+    const request = new AbortController();
+    searchRequestRef.current = request;
     setState((current) => ({
       ...current,
       query,
@@ -96,7 +101,9 @@ export default function LiteratureSearchClient() {
         pageSize,
         sort,
         filter.hasPdfUpload,
+        request.signal,
       );
+      if (request.signal.aborted || searchRequestRef.current !== request) return;
       setState({
         query: result.query,
         view,
@@ -110,7 +117,8 @@ export default function LiteratureSearchClient() {
         isLoading: false,
         hasSearched: true,
       });
-    } catch {
+    } catch (error) {
+      if (request.signal.aborted || searchRequestRef.current !== request) return;
       setState({
         query,
         view,
@@ -120,12 +128,17 @@ export default function LiteratureSearchClient() {
         total: 0,
         totalPages: 0,
         items: [],
-        error: emptyStateCopy.error,
+        error: describeApiError(error, "文献检索"),
         isLoading: false,
         hasSearched: true,
       });
     }
   }
+
+  useEffect(() => () => {
+    searchRequestRef.current?.abort();
+    appliedQueryRef.current = null;
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,6 +149,7 @@ export default function LiteratureSearchClient() {
     const pageSize = Number(form.get("page_size") ?? state.pageSize);
 
     if (!query) {
+      searchRequestRef.current?.abort();
       setState((current) => ({
         ...current,
         query,
@@ -144,6 +158,7 @@ export default function LiteratureSearchClient() {
         items: [],
         error: "请输入检索关键词。",
         hasSearched: true,
+        isLoading: false,
       }));
       return;
     }

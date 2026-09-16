@@ -144,6 +144,59 @@ class TestUpdatePdfMetadata:
 
 
 class TestUpdatePdfParseStatus:
+    def test_replaced_upload_rejects_stale_parse_without_incrementing_counter(self, repo):
+        repo.update_pdf_metadata("cn-ad-gbs-001", "pdf-old", "same.pdf", "pending")
+        repo.update_pdf_metadata("cn-ad-gbs-001", "pdf-new", "same.pdf", "pending")
+        assert (
+            repo.update_pdf_parse_status(
+                "cn-ad-gbs-001", "parsed", expected_pdf_upload_id="pdf-old"
+            )
+            is None
+        )
+        current = repo.get_item_by_id("cn-ad-gbs-001")
+        assert current.pdf_upload_id == "pdf-new"
+        assert current.pdf_parse_status == "pending"
+        assert current.parse_attempt_count == 0
+
+    def test_sqlite_compare_and_set_checks_the_upload_again_at_write_time(self, tmp_path):
+        first = _make_sqlite_repo(tmp_path / "parse-race.sqlite3")
+        second = SqliteLiteratureRepository(tmp_path / "parse-race.sqlite3")
+        first.update_pdf_metadata("cn-ad-gbs-001", "pdf-old", "same.pdf", "pending")
+        connection = first._conn
+
+        class InterleavedConnection:
+            def execute(self, sql, parameters=()):
+                cursor = connection.execute(sql, parameters)
+                if sql.startswith("SELECT pdf_upload_id, pdf_file_name"):
+                    old_row = cursor.fetchone()
+                    second.update_pdf_metadata("cn-ad-gbs-001", "pdf-new", "same.pdf", "pending")
+
+                    class OldSnapshot:
+                        def fetchone(self):
+                            return old_row
+
+                    return OldSnapshot()
+                return cursor
+
+            def __getattr__(self, name):
+                return getattr(connection, name)
+
+        first._conn = InterleavedConnection()
+        try:
+            assert (
+                first.update_pdf_parse_status(
+                    "cn-ad-gbs-001", "parsed", expected_pdf_upload_id="pdf-old"
+                )
+                is None
+            )
+            current = second.get_item_by_id("cn-ad-gbs-001")
+            assert current.pdf_upload_id == "pdf-new"
+            assert current.pdf_parse_status == "pending"
+            assert current.parse_attempt_count == 0
+        finally:
+            first.close()
+            second.close()
+
     def test_counter_increments(self, repo: LiteratureRepository) -> None:
         # First attach PDF metadata
         repo.update_pdf_metadata("pmid-40100001", "pdf-pmid-40100001-paper", "paper.pdf", "pending")

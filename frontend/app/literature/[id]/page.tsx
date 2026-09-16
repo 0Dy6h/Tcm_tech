@@ -4,6 +4,7 @@ import { CardBodyText, CardMetaRow } from "../../../components/CardMeta";
 import DemoDataBanner from "../../../components/DemoDataBanner";
 import EntityChips from "../../../components/EntityChips";
 import LiteraturePdfUploadClient from "../../../components/LiteraturePdfUploadClient";
+import { ApiStatusError } from "../../../lib/api/client";
 import {
   getLiteratureDetail,
   getLiteratureRecordOriginLabel,
@@ -99,7 +100,7 @@ export default async function LiteratureDetailPage({ params }: LiteratureDetailP
             </a>
           </section>
 
-          <LiteraturePdfUploadClient item={item} />
+          <LiteraturePdfUploadClient key={item.id} item={item} />
         </div>
 
         <section aria-label="使用提醒" className="workbench-reminder">
@@ -110,7 +111,8 @@ export default async function LiteratureDetailPage({ params }: LiteratureDetailP
         </section>
       </>
     );
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiStatusError && error.status === 404) notFound();
+    throw error;
   }
 }

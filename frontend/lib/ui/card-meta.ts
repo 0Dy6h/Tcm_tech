@@ -9,6 +9,7 @@ export function getMetaRowStyle() {
     fontSize: 13,
     fontWeight: 800,
     lineHeight: 1.6,
+    overflowWrap: "anywhere",
   };
 }
 

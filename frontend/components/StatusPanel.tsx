@@ -11,7 +11,7 @@ export default function StatusPanel({ message, tone = "idle" }: StatusPanelProps
   const resolvedTone = tone === "idle" || tone === "error" ? getStatusTone(tone === "error") : tone;
 
   return (
-    <div style={getStatusCardStyle(resolvedTone) as CSSProperties}>
+    <div role={resolvedTone === "danger" || resolvedTone === "error" ? "alert" : "status"} aria-atomic="true" style={getStatusCardStyle(resolvedTone) as CSSProperties}>
       <p style={getStatusMessageStyle(resolvedTone) as CSSProperties}>{message}</p>
     </div>
   );

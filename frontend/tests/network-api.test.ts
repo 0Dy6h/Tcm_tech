@@ -15,7 +15,7 @@ import {
 } from "../lib/api/network";
 
 test("buildNetworkAnalyzeUrl returns the analyze endpoint", () => {
-  assert.equal(buildNetworkAnalyzeUrl(), "http://127.0.0.1:8000/api/network/analyze");
+  assert.equal(buildNetworkAnalyzeUrl(), "http://127.0.0.1:8010/api/network/analyze");
 });
 
 test("verifyNetworkDiseaseImport posts raw artifact metadata as multipart without overriding content type", async () => {
@@ -68,7 +68,7 @@ test("verifyNetworkDiseaseImport posts raw artifact metadata as multipart withou
       file,
     );
 
-    assert.equal(buildNetworkDiseaseImportVerifyUrl(), "http://127.0.0.1:8000/api/network/disease-import/verify");
+    assert.equal(buildNetworkDiseaseImportVerifyUrl(), "http://127.0.0.1:8010/api/network/disease-import/verify");
     assert.equal(captured[0].url, buildNetworkDiseaseImportVerifyUrl());
     assert.equal(captured[0].init?.method, "POST");
     assert.deepEqual(captured[0].init?.headers, {});
@@ -158,7 +158,7 @@ test("verifyNetworkCompoundImport posts only source task, metadata, and raw file
 
     assert.equal(
       buildNetworkCompoundImportVerifyUrl(),
-      "http://127.0.0.1:8000/api/network/compound-import/verify",
+      "http://127.0.0.1:8010/api/network/compound-import/verify",
     );
     assert.equal(captured[0].url, buildNetworkCompoundImportVerifyUrl());
     assert.equal(captured[0].init?.method, "POST");
@@ -180,7 +180,7 @@ test("verifyNetworkCompoundImport posts only source task, metadata, and raw file
 test("buildNetworkResultUrl encodes task id and points at result endpoint", () => {
   assert.equal(
     buildNetworkResultUrl("network-abc123"),
-    "http://127.0.0.1:8000/api/network/result/network-abc123",
+    "http://127.0.0.1:8010/api/network/result/network-abc123",
   );
 });
 
@@ -253,7 +253,7 @@ test("submitNetworkAnalysis posts trimmed query and analysis_type, returns task 
     });
 
     assert.equal(captured.length, 1);
-    assert.equal(captured[0].url, "http://127.0.0.1:8000/api/network/analyze");
+    assert.equal(captured[0].url, "http://127.0.0.1:8010/api/network/analyze");
     assert.equal(captured[0].init?.method, "POST");
     const headers = captured[0].init?.headers as Record<string, string>;
     assert.equal(headers["Content-Type"], "application/json");
@@ -418,7 +418,7 @@ test("fetchNetworkResult throws when the response is not ok", async () => {
 test("buildNetworkReportUrl encodes task id and points at report endpoint", () => {
   assert.equal(
     buildNetworkReportUrl("network-abc123"),
-    "http://127.0.0.1:8000/api/network/result/network-abc123/report",
+    "http://127.0.0.1:8010/api/network/result/network-abc123/report",
   );
 });
 
@@ -441,7 +441,7 @@ test("fetchNetworkReportMarkdown returns markdown text on 200", async () => {
     const markdown = await fetchNetworkReportMarkdown("network-abc123");
 
     assert.equal(captured.length, 1);
-    assert.equal(captured[0].url, "http://127.0.0.1:8000/api/network/result/network-abc123/report");
+    assert.equal(captured[0].url, "http://127.0.0.1:8010/api/network/result/network-abc123/report");
     const headers = captured[0].init?.headers as Record<string, string>;
     assert.equal("X-Access-Token" in headers, false);
     assert.ok(markdown.startsWith("# Qiyan Nexus"));
@@ -483,7 +483,7 @@ test("buildNetworkResultUrl appends omics verification params when requested", (
   // 不带选项时保持默认路径（既有契约）
   assert.equal(
     buildNetworkResultUrl("network-abc123"),
-    "http://127.0.0.1:8000/api/network/result/network-abc123",
+    "http://127.0.0.1:8010/api/network/result/network-abc123",
   );
 });
 

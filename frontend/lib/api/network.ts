@@ -649,7 +649,7 @@ export async function submitNetworkAdjudication(
 export async function sealNetworkAssemblyPlan(taskId: string): Promise<NetworkAssemblyPlan> {
   const response = await apiFetch(buildNetworkAssemblyPlansUrl(taskId), { method: "POST" });
   if (!response.ok) {
-    throw new Error("Network assembly gate blocked");
+    throw new ApiStatusError(response.status, "Network assembly gate blocked");
   }
   return response.json();
 }

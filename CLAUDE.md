@@ -72,8 +72,8 @@ py -3.11 -m venv .uv-test-venv
 & .\.uv-test-venv\Scripts\python.exe -m pip install -U pip
 & .\.uv-test-venv\Scripts\python.exe -m pip install -e ".[dev]"
 
-# Dev server (http://127.0.0.1:8000)
-& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py
+# Dev server (http://127.0.0.1:8010)
+& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010
 
 # Tests
 & .\.uv-test-venv\Scripts\python.exe -m pytest -q
@@ -92,7 +92,7 @@ py -3.11 -m venv .uv-test-venv
 
 ```bash
 cd frontend && pnpm install
-cd frontend && pnpm dev            # http://localhost:3000, expects backend at 127.0.0.1:8000
+cd frontend && pnpm dev            # http://localhost:3000, expects backend at 127.0.0.1:8010
 cd frontend && pnpm test           # node --import tsx --test tests/*.test.ts
 cd frontend && pnpm typecheck      # next typegen && tsc --noEmit (includes tests/)
 cd frontend && pnpm build          # next build --webpack
@@ -101,7 +101,7 @@ cd frontend && pnpm build          # next build --webpack
 cd frontend && node --import tsx --test tests/literature-api.test.ts
 
 # Override API base
-$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8000"; cd frontend; pnpm dev
+$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:8010"; cd frontend; pnpm dev
 
 # E2E (A4 — Playwright). One-time host setup: pnpm exec playwright install chromium
 # plus sudo install-deps for libnspr4/libnss3/etc. See frontend/e2e/README.md.

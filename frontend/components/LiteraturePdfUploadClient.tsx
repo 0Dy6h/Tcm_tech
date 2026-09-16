@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 
+import { describeApiError } from "../lib/api/client";
 import {
   buildPdfDownloadUrl,
   getParseTriggerLabel,
@@ -39,6 +40,7 @@ function formatTimestamp(value: string | null | undefined) {
 }
 
 export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadClientProps) {
+  const busyRef = useRef(false);
   const [state, setState] = useState<UploadState>({
     fileName: item.pdf_file_name ?? "",
     result: null,
@@ -69,19 +71,34 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busyRef.current) return;
     const form = new FormData(event.currentTarget);
     const file = form.get("file");
 
     if (!(file instanceof File) || !file.name) {
-      setState((current) => ({ ...current, error: "请选择要上传的 PDF 文件。", result: null }));
+      setState((current) => ({ ...current, error: "请选择要上传的 PDF 文件。" }));
+      return;
+    }
+    if (file.size === 0 || file.size > 20 * 1024 * 1024) {
+      setState((current) => ({ ...current, error: "请选择非空且不超过 20 MB 的 PDF 文件。" }));
       return;
     }
 
+    busyRef.current = true;
     setState((current) => ({ ...current, fileName: file.name, result: null, error: null, isLoading: true, isParsing: false }));
 
+    let result: PdfUploadResponse;
     try {
-      const result = await uploadLiteraturePdf(state.currentItem.id, file);
+      result = await uploadLiteraturePdf(state.currentItem.id, file);
+    } catch (error) {
+      busyRef.current = false;
       setState((current) => ({
+        ...current, error: describeApiError(error, "PDF 上传"), isLoading: false,
+      }));
+      return;
+    }
+
+    setState((current) => ({
         ...current,
         fileName: result.file_name,
         result,
@@ -93,6 +110,7 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
           pdf_parse_message: null,
           pdf_parse_started_at: null,
           pdf_parse_finished_at: null,
+          pdf_parse_result: null,
           last_parse_trigger: null,
           parse_attempt_count: 0,
         },
@@ -101,7 +119,8 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
         isParsing: true,
       }));
 
-      const parsedItem = await runFakePdfAutoParse(state.currentItem.id, result.file_name);
+    try {
+      const parsedItem = await runFakePdfAutoParse(state.currentItem.id, result.file_name, result.pdf_upload_id);
       setState((current) => ({
         ...current,
         currentItem: parsedItem,
@@ -114,23 +133,27 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
         error: null,
         isParsing: false,
       }));
-    } catch {
+    } catch (error) {
       setState((current) => ({
         ...current,
         fileName: file.name,
         result: current.result,
-        error: current.isLoading ? "PDF 上传失败，请稍后重试。" : "PDF 自动解析失败，请稍后重试。",
+        error: `PDF 已上传；${describeApiError(error, "PDF 自动解析")}`,
         isLoading: false,
         isParsing: false,
       }));
+    } finally {
+      busyRef.current = false;
     }
   }
 
   async function onUpdateStatus(nextStatus: "parsed" | "failed") {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setState((current) => ({ ...current, error: null, isUpdatingStatus: true }));
 
     try {
-      const updatedItem = await updatePdfParseStatus(state.currentItem.id, nextStatus);
+      const updatedItem = await updatePdfParseStatus(state.currentItem.id, nextStatus, currentUploadId ?? undefined);
       setState((current) => ({
         ...current,
         currentItem: updatedItem,
@@ -143,12 +166,14 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
         error: null,
         isUpdatingStatus: false,
       }));
-    } catch {
+    } catch (error) {
       setState((current) => ({
         ...current,
-        error: "PDF 解析状态更新失败，请稍后重试。",
+        error: describeApiError(error, "PDF 解析状态更新"),
         isUpdatingStatus: false,
       }));
+    } finally {
+      busyRef.current = false;
     }
   }
 
@@ -260,6 +285,7 @@ export default function LiteraturePdfUploadClient({ item }: LiteraturePdfUploadC
             name="file"
             type="file"
             accept="application/pdf,.pdf"
+            disabled={state.isLoading || state.isParsing || state.isUpdatingStatus}
             aria-label="选择 PDF 文件"
             style={{ color: "var(--qiyan-ink-2)", maxWidth: "100%" }}
           />

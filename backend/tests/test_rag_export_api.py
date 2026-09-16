@@ -1,5 +1,8 @@
 """Integration tests for POST /api/rag/answer/export endpoint."""
 
+import json
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -164,6 +167,70 @@ def test_rag_answer_export_endpoint_returns_plain_text_markdown() -> None:
     assert "应用来源：全部文献" in body
     assert "应用 top_k：2" in body
     assert "Provider：deterministic" in body
+
+
+@pytest.mark.parametrize("suffix", ["", "/docx"])
+def test_signed_answer_survives_browser_json_number_roundtrip(suffix: str) -> None:
+    client = TestClient(app)
+    payload = _request_signed_answer(client, "特应性皮炎的皮肤屏障机制是什么？")
+
+    def javascript_json_number(value: str) -> int | float:
+        number = float(value)
+        return int(number) if number.is_integer() else number
+
+    # JSON.parse / JSON.stringify serialize 0.0 and 1.0 as 0 and 1. The
+    # browser sends those numerically identical values back for both exports.
+    serialized = json.dumps(payload)
+    browser_payload = json.loads(serialized, parse_float=javascript_json_number)
+    assert json.dumps(browser_payload) != serialized
+    response = client.post(f"/api/rag/answer/export{suffix}", json=browser_payload)
+
+    assert response.status_code == 200
+    if suffix:
+        assert response.content.startswith(b"PK")
+    else:
+        assert DISCLAIMER in response.text
+
+
+@pytest.mark.parametrize("replacement", ["2", True, 3])
+def test_export_still_rejects_changed_numeric_types_or_values(replacement: object) -> None:
+    client = TestClient(app)
+    payload = _request_signed_answer(client, "特应性皮炎的皮肤屏障机制是什么？")
+    retrieval = payload["retrieval"]
+    assert isinstance(retrieval, dict)
+    retrieval["applied_top_k"] = replacement
+
+    response = client.post("/api/rag/answer/export", json=payload)
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize("token", ["篡" * 64, "z" * 64])
+def test_export_rejects_malformed_integrity_tokens_without_server_error(token: str) -> None:
+    client = TestClient(app)
+    payload = _request_signed_answer(client, "特应性皮炎的皮肤屏障机制是什么？")
+    payload["integrity_token"] = token
+
+    response = client.post("/api/rag/answer/export", json=payload)
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize("replacement", [float("nan"), float("inf"), "\ud800"])
+def test_export_rejects_nonserializable_signed_fields_without_server_error(
+    replacement: object,
+) -> None:
+    client = TestClient(app)
+    payload = _request_signed_answer(client, "特应性皮炎的皮肤屏障机制是什么？")
+    payload["answer"] = replacement
+
+    response = client.post(
+        "/api/rag/answer/export",
+        content=json.dumps(payload),
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 409
 
 
 def test_rag_answer_export_endpoint_handles_empty_citations() -> None:

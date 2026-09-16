@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.core.metrics import record_request_latency, reset_metrics
 from app.main import app
 
-client = TestClient(app)
+client = TestClient(app, base_url="http://127.0.0.1")
 
 
 def test_get_performance_metrics_empty():

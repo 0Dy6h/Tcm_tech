@@ -220,6 +220,7 @@ class PostgresLiteratureRepository:
         pdf_parse_finished_at: str | None = None,
         pdf_parse_result: PdfParseResult | None = None,
         last_parse_trigger: str | None = None,
+        expected_pdf_upload_id: str | None = None,
     ) -> LiteratureItem | None:
         """Update PDF parse status and related fields."""
         with self._get_pool().connection() as conn:
@@ -239,6 +240,11 @@ class PostgresLiteratureRepository:
                     or existing["pdf_file_name"] is None
                 ):
                     return None
+                if (
+                    expected_pdf_upload_id is not None
+                    and existing["pdf_upload_id"] != expected_pdf_upload_id
+                ):
+                    return None
 
                 cur.execute(
                     """
@@ -250,7 +256,7 @@ class PostgresLiteratureRepository:
                         pdf_parse_result = %s,
                         last_parse_trigger = %s,
                         parse_attempt_count = COALESCE(parse_attempt_count, 0) + 1
-                    WHERE id = %s
+                    WHERE id = %s AND pdf_upload_id = %s AND pdf_file_name = %s
                     RETURNING *
                     """,
                     (
@@ -261,6 +267,8 @@ class PostgresLiteratureRepository:
                         Jsonb(pdf_parse_result.model_dump()) if pdf_parse_result else None,
                         last_parse_trigger,
                         literature_id,
+                        existing["pdf_upload_id"],
+                        existing["pdf_file_name"],
                     ),
                 )
                 row = cur.fetchone()

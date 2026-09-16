@@ -2,6 +2,19 @@ import os
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def use_loopback_test_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TestClient 的默认虚构域名不代表本机预览；显式 Host 测试仍可覆盖它。"""
+    original_init = TestClient.__init__
+
+    def init(self, *args, **kwargs):
+        kwargs.setdefault("base_url", "http://127.0.0.1")
+        original_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, "__init__", init)
 
 
 def _copy_seed(source_name: str, target: Path) -> None:

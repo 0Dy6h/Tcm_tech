@@ -47,6 +47,7 @@ class LiteratureRepository(Protocol):
         pdf_parse_finished_at: str | None = None,
         pdf_parse_result: PdfParseResult | None = None,
         last_parse_trigger: str | None = None,
+        expected_pdf_upload_id: str | None = None,
     ) -> LiteratureItem | None: ...
 
     def bulk_upsert_pubmed_items(self, incoming_items: list[dict[str, Any]]) -> tuple[int, int]: ...

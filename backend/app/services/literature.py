@@ -1,4 +1,5 @@
 import hashlib
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -191,7 +192,14 @@ def get_literature_item(item_id: str) -> LiteratureItem | None:
     return _REPOSITORY.get_item_by_id(item_id)
 
 
-def build_pdf_upload_id(literature_id: str, file_name: str) -> str:
+def build_pdf_upload_id(
+    literature_id: str, file_name: str, *, content_sha256: str | None = None
+) -> str:
+    if content_sha256 is not None:
+        # Include the exact filename and literature identity, not their lossy
+        # slugs. Old citations retain their file when a paper is uploaded again.
+        binding = json.dumps([literature_id, file_name, content_sha256], ensure_ascii=False)
+        return f"pdf-{hashlib.sha256(binding.encode('utf-8')).hexdigest()}"
     slug = re.sub(r"[^a-z0-9]+", "-", file_name.lower()).strip("-")
     # When the slug collapses to empty or the bare extension (typical for
     # pure-CJK filenames), fold a short content-addressed digest of the original
@@ -201,13 +209,19 @@ def build_pdf_upload_id(literature_id: str, file_name: str) -> str:
     if not slug or slug == "pdf":
         digest = hashlib.sha1(file_name.encode("utf-8")).hexdigest()[:8]
         slug = f"pdf-{digest}"
-    return f"pdf-{literature_id}-{slug}"
+    upload_id = f"pdf-{literature_id}-{slug}"
+    if len(upload_id) > 104:
+        binding = json.dumps([literature_id, file_name], ensure_ascii=False)
+        return f"pdf-{hashlib.sha256(binding.encode('utf-8')).hexdigest()}"
+    return upload_id
 
 
-def attach_pdf_metadata(literature_id: str, file_name: str) -> LiteratureItem | None:
+def attach_pdf_metadata(
+    literature_id: str, file_name: str, *, pdf_upload_id: str | None = None
+) -> LiteratureItem | None:
     return _REPOSITORY.update_pdf_metadata(
         literature_id=literature_id,
-        pdf_upload_id=build_pdf_upload_id(literature_id, file_name),
+        pdf_upload_id=pdf_upload_id or build_pdf_upload_id(literature_id, file_name),
         pdf_file_name=file_name,
         pdf_parse_status="pending",
     )
@@ -417,12 +431,19 @@ def update_pdf_parse_status(
     literature_id: str,
     pdf_parse_status: str,
     trigger: str = "manual",
+    *,
+    expected_pdf_upload_id: str | None = None,
+    expected_file_name: str | None = None,
 ) -> tuple[str, LiteratureItem | None]:
     item = _REPOSITORY.get_item_by_id(literature_id)
     if item is None:
         return "not_found", None
     if not item.pdf_upload_id or not item.pdf_file_name:
         return "missing_metadata", None
+    if (expected_pdf_upload_id is not None and item.pdf_upload_id != expected_pdf_upload_id) or (
+        expected_file_name is not None and item.pdf_file_name != expected_file_name
+    ):
+        return "conflict", None
     pdf_parse_message, pdf_parse_started_at, pdf_parse_finished_at = build_parse_metadata(
         pdf_parse_status
     )
@@ -432,7 +453,7 @@ def update_pdf_parse_status(
             "pdf_parse_status": pdf_parse_status,
         }
     )
-    return "ok", _REPOSITORY.update_pdf_parse_status(
+    updated = _REPOSITORY.update_pdf_parse_status(
         literature_id,
         pdf_parse_status,
         pdf_parse_message=pdf_parse_message,
@@ -440,7 +461,9 @@ def update_pdf_parse_status(
         pdf_parse_finished_at=pdf_parse_finished_at,
         pdf_parse_result=build_pdf_parse_result(next_item),
         last_parse_trigger=trigger,
+        expected_pdf_upload_id=item.pdf_upload_id,
     )
+    return ("ok", updated) if updated is not None else ("conflict", None)
 
 
 def _default_pubmed_fetcher() -> PubmedFetcher:

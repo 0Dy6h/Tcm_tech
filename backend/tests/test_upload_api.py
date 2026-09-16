@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -66,14 +67,14 @@ def test_pdf_upload_endpoint_persists_file_and_attaches_metadata(monkeypatch, tm
     assert response.status_code == 201
     payload = response.json()
     assert payload["literature_id"] == "cn-ad-gbs-001"
-    assert payload["pdf_upload_id"] == "pdf-cn-ad-gbs-001-ad-evidence-pdf"
+    assert re.fullmatch(r"pdf-[a-f0-9]{64}", payload["pdf_upload_id"])
     assert payload["file_name"] == "ad-evidence.pdf"
     assert payload["pdf_parse_status"] == "pending"
-    assert payload["storage_path"].endswith("pdf-cn-ad-gbs-001-ad-evidence-pdf.pdf")
+    assert payload["storage_path"].endswith(f"{payload['pdf_upload_id']}.pdf")
 
     persisted = json.loads(temp_data_path.read_text(encoding="utf-8"))
     first = next(item for item in persisted if item["id"] == "cn-ad-gbs-001")
-    assert first["pdf_upload_id"] == "pdf-cn-ad-gbs-001-ad-evidence-pdf"
+    assert first["pdf_upload_id"] == payload["pdf_upload_id"]
     assert first["pdf_file_name"] == "ad-evidence.pdf"
     assert first["pdf_parse_status"] == "pending"
     assert first["pdf_parse_message"] is None
@@ -113,7 +114,7 @@ def test_pdf_upload_endpoint_normalizes_storage_suffix_to_pdf_for_uppercase_file
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["storage_path"].endswith("pdf-cn-ad-gbs-001-ad-evidence-pdf.pdf")
+    assert payload["storage_path"].endswith(f"{payload['pdf_upload_id']}.pdf")
 
     download_response = client.get(f"/api/uploads/pdf/{payload['pdf_upload_id']}")
     assert download_response.status_code == 200
@@ -618,12 +619,12 @@ def test_pdf_upload_endpoint_stores_with_upload_id_based_name_to_avoid_filename_
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["pdf_upload_id"] == "pdf-cn-ad-gbs-001-review-pdf"
-    assert payload["storage_path"].endswith("pdf-cn-ad-gbs-001-review-pdf.pdf")
+    assert re.fullmatch(r"pdf-[a-f0-9]{64}", payload["pdf_upload_id"])
+    assert payload["storage_path"].endswith(f"{payload['pdf_upload_id']}.pdf")
 
     stored_file = Path(payload["storage_path"])
     assert stored_file.exists()
-    assert stored_file.name == "pdf-cn-ad-gbs-001-review-pdf.pdf"
+    assert stored_file.name == f"{payload['pdf_upload_id']}.pdf"
 
 
 def test_pdf_download_endpoint_returns_uploaded_file_by_upload_id(monkeypatch, tmp_path: Path):

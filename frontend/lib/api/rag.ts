@@ -1,4 +1,5 @@
-import { ApiStatusError, apiFetch, buildApiHeaders } from "./client";
+import { ApiStatusError, apiFetch, buildApiHeaders, getBackendBaseUrl } from "./client";
+export { getBackendBaseUrl } from "./client";
 
 export type RagSource = "all" | "cn_literature" | "pubmed";
 
@@ -70,10 +71,6 @@ export type RagAnswerResponse = {
   sli?: ProviderSli | null;
   integrity_token: string;
 };
-
-export function getBackendBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
-}
 
 export function buildRagAnswerUrl() {
   return new URL("/api/rag/answer", getBackendBaseUrl()).toString();

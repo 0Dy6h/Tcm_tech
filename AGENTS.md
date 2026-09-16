@@ -39,7 +39,7 @@
 
 后端 venv 是 `backend/.uv-test-venv`（不是 `.venv`），必须走 `Scripts\python.exe`。
 
-**端口事实（2026-09-04 起）**：本机 8000 被另一项目常驻占用，全程不可触碰。下方涉及 8000 的命令仅作写法参考，本项目实际一律走 isolated runtime 预览的隔离端口（后端 8010 / 前端 3000；CORS 自 2026-09-06 起允许本机回环 3000 与 3100，3100 供内部预览换端口场景）。2026-09-12 起该禁区在脚本层 fail closed：`run-internal-preview.ps1` / `verify-local.ps1`（E2E）/ `smoke-internal-preview.ps1`（回环 URL）显式传 8000 一律 throw，预览与 E2E 默认值即 8010；`frontend/lib/api/*.ts` 的浏览器默认 base URL 仍是 8000（历史 dev 组合流，preview 路径已显式注入 `NEXT_PUBLIC_API_BASE_URL`，改动需单独切片）。
+**端口事实（2026-09-16）**：本机 8000 保留给另一项目，全程不可触碰。本项目本地 `pnpm dev:backend`、前端 API fallback、preview 与 E2E 默认后端均为 8010，前端默认 3000。`run-internal-preview.ps1` / `verify-local.ps1` / `smoke-internal-preview.ps1` 继续显式拒绝本机 8000。前端所有 fetcher 共用 `frontend/lib/api/client.ts` 的 base URL 解析；server rendering 优先非公开 `QIYAN_INTERNAL_API_BASE_URL`，浏览器使用 `NEXT_PUBLIC_API_BASE_URL` 或 8010 fallback。CORS 仍仅允许本机回环 3000 / 3100；云端 runbook 与容器的内部 8000 属于独立部署语境。
 
 ```powershell
 # 推荐：统一本地门禁（默认跑 backend 4 项 + frontend test/typecheck/build）
@@ -65,12 +65,12 @@ cd backend
 & .\.uv-test-venv\Scripts\python.exe -m pytest tests\test_rag_service.py -q
 & .\.uv-test-venv\Scripts\python.exe -m pytest "tests\test_rag_service.py::test_name" -q
 
-# dev server (http://127.0.0.1:8000)
-& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py
+# dev server (http://127.0.0.1:8010)
+& .\.uv-test-venv\Scripts\fastapi.exe dev app/main.py --port 8010
 ```
 
 ```powershell
-# 前端（pnpm，期望后端在 127.0.0.1:8000）
+# 前端（pnpm，期望后端在 127.0.0.1:8010）
 cd frontend
 pnpm test        # node --import tsx --test tests/*.test.ts，无 build 步
 pnpm typecheck   # next typegen && tsc --noEmit（含 tests/）
@@ -81,7 +81,7 @@ node --import tsx --test tests\literature-api.test.ts   # 单测文件
 ```powershell
 # 仓库根便捷脚本（package.json 代理到 frontend/ 或 scripts/）
 pnpm dev           # frontend dev
-pnpm dev:backend   # 直接用 uvicorn 起后端 127.0.0.1:8000（不是 fastapi dev）
+pnpm dev:backend   # 直接用 uvicorn 起后端 127.0.0.1:8010（不是 fastapi dev）
 pnpm preview       # = scripts\run-internal-preview.ps1（isolated runtime 起前后端）
 pnpm preview:stop
 
@@ -110,6 +110,7 @@ pnpm preview:stop
 
 - 后端严格分层：`api/` → `services/` → `repositories/` → `schemas/`，不许跨层（router 不直接读 JSON，service 不 import FastAPI）。router 在 `app/main.py` 接线。
 - CORS 仅放行本机回环 `localhost`/`127.0.0.1` 的 3000 与 3100（3100 对应 `run-internal-preview.ps1 -FrontendPort 3100` 换端口场景），仅 `GET, POST`；加来源或 `PUT`/`DELETE` 路由要改 `app/main.py` 中间件，并同步 `test_cors.py` 的放行+拒绝契约测试。
+- 开放预览也有请求来源边界（2026-09-14）：仅接受回环 Host；Origin 必须是上述前端来源或后端自身来源。CORS 不能代替写入防护，multipart simple request 同样在处理前拒绝外站与 `null` Origin。请求上限按实际流式字节计数，不仅依赖 Content-Length。TestClient 使用回环 base_url；虚构域名仅用于拒绝测试。受 token 保护的部署继续按既有代理/鉴权契约运行。
 - 免责声明字符串 `非诊断结论、需结合临床。` 是 load-bearing，被后端测试、eval、前端断言引用，必须逐字节一致，不要改写 `services/rag.py` 的 `DISCLAIMER`。同族还有 RAG 实体零命中话术：`entity_matched is False` 时输出「未检索到与所问实体直接对应的证据片段」开头（`services/llm/provider.py`，`test_llm_provider.py` 断言），改话术要同步改测试，且不得顺手调检索排序/eval 预期。
 - RAG 契约：`/api/rag/answer` 返回的每个 `citations[*].literature_id` 必须能被 `/api/literature/{id}` 解析（`test_rag_literature_contract.py`）。
 - runtime 状态写在 `backend/data/runtime/`（gitignored），是本地开发态，不要回写 seed fixture，也不要把 runtime state / 上传的 PDF 当 fixture 提交。
@@ -129,6 +130,7 @@ pnpm preview:stop
 - 跨端字段的位置必须两侧各有断言。后端放在响应信封、前端从嵌套快照读取时不会有任何报错，只会静默显示 0。
 - 门禁全红时先排除工具链再改代码：pnpm 写绝对 symlink，仓库目录一旦移动，前端依赖全部悬空、前端门禁全红且与 diff 无关，需 `rm -rf frontend/node_modules && pnpm install --frozen-lockfile`；`.next` 缓存同样含迁移前绝对路径，目录移动后 dev/E2E 会出现与 diff 无关的间歇性失败（如 Playwright `networkidle` 超时），需一并 `rm -rf frontend/.next`；`pnpm build` 还会在 dev/build 间来回改写 `frontend/next-env.d.ts` 的 routes 类型路径，build 后树变脏时 `git checkout -- frontend/next-env.d.ts` 即可，不是代码问题。判断某条失败是否既有，用 `git stash` 清空改动后复跑确认，且复跑必须处于干净工具链（已重装依赖、已清缓存），不要凭印象归因。
 - 启动外部进程时传结构化 argv，禁止拼接 `PowerShell -Command` 或 curl config/header 字符串；端口和凭证参数必须先校验。
+- PDF 上传的真实文件 ID 绑定文献、完整文件名和字节 SHA-256，长度受限且旧文件不可覆写；旧 filename-only ID 保持可读兼容。JSON 文献与 chunk 更新按 canonical path 共享进程内锁，并原子替换文件；不承诺跨进程事务。解析/人工状态请求需传当前 `pdf_upload_id`，服务层与三种仓储重验 ID，过期返回 409，禁止把旧解析预览附在新文件上。
 - PDF 流分两步：`POST /api/uploads/pdf` 只落盘并置 `pending`，要单独调 `POST /api/uploads/pdf/auto-parse` 才推进到 `parsed`/`failed`；upload endpoint 不做重解析。
 - 前端测试套件（`frontend/tests/`，45 个测试文件）里有 23 个源码断言测试（`grep -l '\.tsx' frontend/tests/*.test.ts` 可列全，如 `pdf-upload-status`、`literature-detail-meta`、`client-section-consistency`、`page-shell-consistency`、`network-evidence-grading-ui` 等）用 `readFileSync` 对 `.tsx` 源码做正则断言；改页面壳、导航、可见 meta 文案或组件内嵌逻辑时最容易挂这批。
 - 后端 mypy `strict=true` 仅作用于 `app/`（tests 排除）；`B008` 全局忽略，因为 FastAPI 用 `Body()`/`Form()`/`File()`/`Query()` 当默认值。

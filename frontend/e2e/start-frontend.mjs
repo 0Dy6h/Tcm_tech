@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 const port = process.env.QIYAN_E2E_FRONTEND_PORT ?? "3000";
-const backendPort = process.env.QIYAN_E2E_BACKEND_PORT ?? "8000";
+const backendPort = process.env.QIYAN_E2E_BACKEND_PORT ?? "8010";
 
 const pnpmEntrypoint = process.env.npm_execpath;
 const command = pnpmEntrypoint ? process.execPath : process.platform === "win32" ? "pnpm.cmd" : "pnpm";

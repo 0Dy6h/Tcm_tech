@@ -104,7 +104,7 @@ test("network analysis client downloads the report through a browser blob", () =
   assert.match(clientSource, /URL\.createObjectURL\(blob\)/);
   assert.match(clientSource, /anchor\.download = fileName/);
   assert.match(clientSource, /URL\.revokeObjectURL\(url\)/);
-  assert.match(clientSource, /导出报告失败，请稍后重试。/);
+  assert.match(clientSource, /setErrorMessage\(describeApiError\(error, "导出报告"\)\)/);
 });
 
 test("network page surfaces a prominent mock-data boundary note", () => {

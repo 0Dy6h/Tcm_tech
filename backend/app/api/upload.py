@@ -54,7 +54,9 @@ def download_pdf_endpoint(pdf_upload_id: str) -> FileResponse:
 @router.post("/pdf/auto-parse", response_model=LiteratureItem)
 def auto_parse_pdf_endpoint(request: FakePdfAutoParseRequest = Body()) -> LiteratureItem:
     try:
-        return auto_parse_uploaded_pdf(request.literature_id, request.file_name)
+        return auto_parse_uploaded_pdf(
+            request.literature_id, request.file_name, request.pdf_upload_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except LookupError as exc:

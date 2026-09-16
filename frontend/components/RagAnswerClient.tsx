@@ -14,7 +14,7 @@ import {
   RagAnswerResponse,
   RagSource,
 } from "../lib/api/rag";
-import { ApiStatusError } from "../lib/api/client";
+import { ApiStatusError, describeApiError } from "../lib/api/client";
 import { buildPdfDownloadUrl } from "../lib/api/literature";
 import { buildAnswerDocxFileName, buildAnswerMarkdownFileName } from "../lib/rag-export";
 import { getCitationEmptyCopy, getEmptyStateCopy, getStatusCopy } from "../lib/ui/states";
@@ -235,8 +235,8 @@ export default function RagAnswerClient() {
     let markdown: string;
     try {
       markdown = await fetchRagAnswerMarkdown(state.result);
-    } catch {
-      setState((current) => ({ ...current, error: "导出失败，请稍后重试。" }));
+    } catch (error) {
+      setState((current) => ({ ...current, error: describeApiError(error, "导出 Markdown 答案") }));
       return;
     }
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
@@ -250,8 +250,8 @@ export default function RagAnswerClient() {
     let blob: Blob;
     try {
       blob = await fetchRagAnswerDocx(state.result);
-    } catch {
-      setState((current) => ({ ...current, error: "导出失败，请稍后重试。" }));
+    } catch (error) {
+      setState((current) => ({ ...current, error: describeApiError(error, "导出 Word 答案") }));
       return;
     }
     downloadBlob(blob, buildAnswerDocxFileName(state.result.answered_at));

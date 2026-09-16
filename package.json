@@ -5,7 +5,7 @@
   "description": "Qiyan Nexus monorepo root convenience scripts. Frontend app lives in frontend/, backend in backend/.",
   "scripts": {
     "dev": "pnpm --dir frontend dev",
-    "dev:backend": "cd backend && .\\.uv-test-venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000",
+    "dev:backend": "cd backend && .\\.uv-test-venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8010",
     "build": "pnpm --dir frontend build",
     "test": "pnpm --dir frontend test",
     "typecheck": "pnpm --dir frontend typecheck",

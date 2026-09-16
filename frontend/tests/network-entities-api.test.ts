@@ -7,7 +7,7 @@ import {
 } from "../lib/api/network-entities";
 
 test("buildNetworkEntitiesUrl returns entities endpoint with default backend base URL", () => {
-  assert.equal(buildNetworkEntitiesUrl(), "http://127.0.0.1:8000/api/network/entities");
+  assert.equal(buildNetworkEntitiesUrl(), "http://127.0.0.1:8010/api/network/entities");
 });
 
 test("fetchNetworkEntities flattens the grouped backend payload into an id-keyed lookup", async () => {
