@@ -39,7 +39,6 @@
 | Flower | Celery 监控面板 | 端口 5555 的任务监控 UI |
 | G6 | AntV G6 | 前端图谱可视化引擎 |
 | R2 / MinIO | MinIO 对象存储 | 本地 Docker Compose S3 兼容存储，PDF 文件仓库（见 ADR-0007）。阶段 2 可无缝迁移至 Cloudflare R2 |
-| PgBouncer | 数据库连接池 | PostgreSQL 连接管理 |
 
 ## 流程中的术语
 

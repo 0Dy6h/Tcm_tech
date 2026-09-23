@@ -32,7 +32,7 @@ def _close_if_sqlite(repo: object | None) -> None:
     """Close a repository connection/pool if it has one.
 
     JSON/in-memory repositories have no ``close`` method, so this is a no-op
-    for them. SQLite and PostgreSQL repositories expose ``close()`` to release
+    for them. SQLite repositories expose ``close()`` to release
     local file locks or connection pools.
     """
     close = getattr(repo, "close", None)
@@ -151,7 +151,6 @@ def get_literature_repository() -> "LiteratureRepository":
 
     - ``"json"`` (default)   → InMemoryLiteratureRepository
     - ``"sqlite"``           → SqliteLiteratureRepository
-    - ``"postgresql"``       → PostgresLiteratureRepository
 
     Results are cached at module level; call
     :func:`clear_literature_repository_cache` to reset (e.g. in tests).
@@ -165,11 +164,7 @@ def get_literature_repository() -> "LiteratureRepository":
 
     _close_if_sqlite(_lit_repo_cache)
 
-    if backend == "postgresql":
-        from app.repositories.postgres_literature import PostgresLiteratureRepository
-
-        _lit_repo_cache = PostgresLiteratureRepository()
-    elif backend == "sqlite":
+    if backend == "sqlite":
         from app.repositories.sqlite_literature import SqliteLiteratureRepository
 
         db_path = resolve_sqlite_db_path()
@@ -197,7 +192,6 @@ def get_chunk_repository() -> "ChunkRepository":
 
     - ``"json"`` (default)   → InMemoryChunkRepository
     - ``"sqlite"``           → SqliteChunkRepository
-    - ``"postgresql"``       → PostgresChunkRepository
 
     Results are cached at module level; call
     :func:`clear_chunk_repository_cache` to reset (e.g. in tests).
@@ -211,11 +205,7 @@ def get_chunk_repository() -> "ChunkRepository":
 
     _close_if_sqlite(_chunk_repo_cache)
 
-    if backend == "postgresql":
-        from app.repositories.postgres_chunk import PostgresChunkRepository
-
-        _chunk_repo_cache = PostgresChunkRepository()
-    elif backend == "sqlite":
+    if backend == "sqlite":
         from app.repositories.sqlite_chunk import SqliteChunkRepository
 
         db_path = resolve_sqlite_db_path()
@@ -243,7 +233,6 @@ def get_network_task_repository() -> "NetworkTaskRepositoryProtocol":
 
     - ``"json"`` (default)   → NetworkTaskRepository (InMemory)
     - ``"sqlite"``           → SqliteNetworkTaskRepository
-    - ``"postgresql"``       → PostgresNetworkTaskRepository
 
     Results are cached at module level; call
     :func:`clear_network_task_repository_cache` to reset (e.g. in tests).
@@ -258,11 +247,7 @@ def get_network_task_repository() -> "NetworkTaskRepositoryProtocol":
 
         _close_if_sqlite(_nt_repo_cache)
 
-        if backend == "postgresql":
-            from app.repositories.postgres_network_tasks import PostgresNetworkTaskRepository
-
-            _nt_repo_cache = PostgresNetworkTaskRepository()
-        elif backend == "sqlite":
+        if backend == "sqlite":
             from app.repositories.sqlite_network_tasks import SqliteNetworkTaskRepository
 
             db_path = resolve_sqlite_db_path()

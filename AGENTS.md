@@ -116,7 +116,7 @@ pnpm preview:stop
 - runtime 状态写在 `backend/data/runtime/`（gitignored），是本地开发态，不要回写 seed fixture，也不要把 runtime state / 上传的 PDF 当 fixture 提交。
 - reviewer identity 只能来自 access token 验证后的 request state；受保护部署由可信 nginx 覆盖写入 `X-Qiyan-Reviewer`。禁止信任浏览器或任意客户端直传的 reviewer header，后端 8000 必须保持 loopback。
 - network task 必须按 `task_id + owner_id` 查询和推进；foreign 或 legacy ownerless task 都要 fail closed。report GET 是只读观察接口，不得借读取推进状态或写 runtime。
-- 派生 network task 的 parent link 也是授权边界：必须通过同 owner 的查询解析，`source_task_id` 要跨 JSON/SQLite/PostgreSQL、result、report 持久化且不可变，禁止 self-link 与 child-of-child。缺少 link 的 legacy child 在 result/report/export 读取时只返回非持久化失败投影，不得由读取修复或推进。
+- 派生 network task 的 parent link 也是授权边界：必须通过同 owner 的查询解析，`source_task_id` 要跨 JSON/SQLite、result、report 持久化且不可变，禁止 self-link 与 child-of-child。缺少 link 的 legacy child 在 result/report/export 读取时只返回非持久化失败投影，不得由读取修复或推进。
 - 靶点集合必须失败关闭：`disease_targets`、`compound_targets`、`intersection_targets` 分开建模；没有独立疾病靶点来源时 disease/intersection 必须为空，禁止从 compound set 自造交集。同一 canonical symbol 的不同 source record 保留多行，unique target count 与 lineage row count 分开；自动抽取不得冒充人工 adjudication。`disease_target_import` 在 task 创建时封存且不可后改：旧 `/api/network/analyze` 客户端导入固定为 `unverified_client_import`；`server_verified_raw_artifact` 只能由受支持的离线 raw artifact（当前为 Open Targets GraphQL 疾病数据或 `chembl_known_activity_v1` ChEMBL 成分数据）经服务端 SHA-256、operator-controlled trusted manifest 与服务端 parser 派生。客户端不得提交 records/hash/provenance/readiness/判定字段，multipart 外层也必须 strict allowlist；该中间态不得命名为 `verified`，且不得翻转 `formal_network_ready`。intersection 必须是一条/unique symbol 的服务端派生 row，并完整引用两侧匹配 lineage row IDs。
 - 双侧 raw artifact 只建立冻结 snapshot，不自动授权下游网络结论。compound child 必须跳过 provider、机制链、PPI、通路与 enrichment，保持 `chains=[]`、`enrichment=null` 和明确的 network-assembly blocker；独立 validator、report 与 UI 必须共同执行该 snapshot-only 边界。
 - 人工判定是与冻结快照平行的 append-only 审计流，不属于快照：projection 挂在结果响应信封而非 `NetworkAnalysisResult`，同一 lineage row 多次判定按 latest-wins 投影，`reviewer_id` 持久化但从不回投，且结构上不得翻转 `formal_network_ready`。冻结 lineage row 的 `adjudication_status` / `decision` 不由该审计流回写。「能记录判定」不等于「已有人判定」，更不等于科学有效。
@@ -139,7 +139,7 @@ pnpm preview:stop
 
 ## 已冻结的技术决策
 
-项目当前采用小步可验证的内部预览边界：前端是 Next.js / React / Ant Design，后端是 FastAPI / Pydantic；默认使用本地 JSON seed、runtime state、可选 SQLite runtime backend 与 deterministic retrieval，不提前接入 PostgreSQL、pgvector、Neo4j、Celery、Redis、MinIO、真实 LLM 或真实 embedding。上述重依赖保留为后续阶段的架构方向或显式 spike，而不是当前默认实现要求。
+项目当前采用小步可验证的内部预览边界：前端是 Next.js / React / Ant Design，后端是 FastAPI / Pydantic；默认使用本地 JSON seed、runtime state、可选 SQLite runtime backend 与 deterministic retrieval，不提前接入 Neo4j、Celery、Redis、MinIO、真实 LLM 或真实 embedding。上述重依赖保留为后续阶段的架构方向，而不是当前默认实现要求。（PostgreSQL/pgvector spike 已于 2026-09-23 按拍板移除。）
 
 ## 产品边界
 

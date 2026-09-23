@@ -21,7 +21,6 @@ import pytest
 from app.repositories import network_tasks as network_tasks_module
 from app.repositories import sqlite_network_tasks
 from app.repositories.network_tasks import NetworkTaskRepository
-from app.repositories.postgres_network_tasks import _row_to_record as postgres_row_to_record
 from app.repositories.protocols import NetworkTaskRepositoryProtocol
 from app.repositories.runtime_storage import (
     clear_network_task_repository_cache,
@@ -332,81 +331,6 @@ class TestAssemblyPlanPersistence:
             "network-bbb",
             "network-aaa",
         ]
-
-
-def test_postgres_jsonb_row_preserves_verified_disease_snapshot() -> None:
-    snapshot = NetworkDiseaseTargetVerifiedSnapshot(
-        source_profile="open_targets_association_v1",
-        disease="atopic_dermatitis",
-        phenotype="特应性皮炎伴 2 型炎症",
-        species="Homo sapiens",
-        source_database="Open Targets Platform",
-        database_version="25.06",
-        source_query_id="EFO_0000274",
-        source_query_label="atopic eczema",
-        source_query_parameters={"datatype": "overall"},
-        query_date="2026-07-11",
-        retrieved_at="2026-07-11T08:30:00Z",
-        score_name="association_score",
-        applied_threshold=0.6,
-        threshold_operator="gte",
-        identifier_mapping="Ensembl target approvedSymbol",
-        identifier_mapping_version="25.06",
-        provenance_verification_status="server_verified_raw_artifact",
-        import_payload_sha256="a" * 64,
-        source_artifact_sha256="b" * 64,
-        source_artifact_filename="open-targets.jsonl",
-        source_artifact_media_type="application/x-ndjson",
-        usage_license_note="Open Targets Platform data usage terms apply.",
-        records=[],
-    )
-
-    record = postgres_row_to_record(
-        {
-            "task_id": "network-postgres-verified",
-            "owner_id": "reviewer-a",
-            "query": "消风散",
-            "analysis_type": "formula",
-            "research_protocol": None,
-            "disease_target_import": snapshot.model_dump(mode="json"),
-            "status": "queued",
-            "progress": 0,
-            "poll_count": 0,
-            "data_mode": "mock",
-            "result": None,
-            "error": None,
-            "warnings": [],
-            "created_at": "2026-07-11T00:00:00+00:00",
-        }
-    )
-
-    assert record.disease_target_import == snapshot
-
-
-def test_postgres_jsonb_row_preserves_verified_compound_snapshot() -> None:
-    snapshot = _verified_compound_snapshot()
-
-    record = postgres_row_to_record(
-        {
-            "task_id": "network-postgres-compound-verified",
-            "owner_id": "reviewer-a",
-            "query": "消风散",
-            "analysis_type": "formula",
-            "research_protocol": None,
-            "disease_target_import": None,
-            "compound_target_import": snapshot.model_dump(mode="json"),
-            "status": "queued",
-            "progress": 0,
-            "poll_count": 0,
-            "data_mode": "mock",
-            "result": None,
-            "error": None,
-            "warnings": [],
-            "created_at": "2026-07-12T00:00:00+00:00",
-        }
-    )
-
-    assert record.compound_target_import == snapshot
 
 
 class TestGet:
@@ -1182,58 +1106,6 @@ class TestAppendAdjudication:
             close = getattr(legacy_repo, "close", None)
             if callable(close):
                 close()
-
-
-def test_postgres_jsonb_row_preserves_adjudications() -> None:
-    adjudication = _adjudication("disease-" + "a" * 64, reviewer_id="reviewer-a")
-
-    record = postgres_row_to_record(
-        {
-            "task_id": "network-postgres-adj",
-            "owner_id": "reviewer-a",
-            "query": "消风散",
-            "analysis_type": "formula",
-            "research_protocol": None,
-            "disease_target_import": None,
-            "status": "completed",
-            "progress": 100,
-            "poll_count": 2,
-            "data_mode": "mock",
-            "result": None,
-            "error": None,
-            "warnings": [],
-            "adjudications": [adjudication.model_dump(mode="json")],
-            "created_at": "2026-07-15T00:00:00+00:00",
-        }
-    )
-
-    assert record.adjudications == [adjudication]
-
-
-def test_postgres_jsonb_row_without_adjudications_defaults_to_empty() -> None:
-    record = postgres_row_to_record(
-        {
-            "task_id": "network-postgres-noadj",
-            "owner_id": "reviewer-a",
-            "query": "消风散",
-            "analysis_type": "formula",
-            "research_protocol": None,
-            "disease_target_import": None,
-            "status": "queued",
-            "progress": 0,
-            "poll_count": 0,
-            "data_mode": "mock",
-            "result": None,
-            "error": None,
-            "warnings": [],
-            "created_at": "2026-07-15T00:00:00+00:00",
-        }
-    )
-
-    assert record.adjudications == []
-
-
-# ── Factory / Protocol tests ──────────────────────────────────────────
 
 
 class TestGetNetworkTaskRepository:

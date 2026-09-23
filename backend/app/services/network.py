@@ -1273,7 +1273,7 @@ _CONSUMPTION_RECORD_LIMIT_ENV = "QIYAN_CONSUMPTION_RECORD_LIMIT"
 _DEFAULT_CONSUMPTION_RECORD_LIMIT = 1000
 _JSON_PREVIEW_BOUNDARIES = [
     "JSON 后端仅支持同进程、同实例 writer（preview 语义），不保证跨进程 exactly-once。",
-    "多进程 writer 必须切换到 SQLite/PostgreSQL 后端。",
+    "多进程 writer 必须切换到 SQLite 后端。",
 ]
 
 

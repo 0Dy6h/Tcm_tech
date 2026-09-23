@@ -1,9 +1,8 @@
-"""Benchmark JSON / SQLite / PostgreSQL runtime storage backends.
+"""Benchmark JSON / SQLite runtime storage backends.
 
 Examples:
     python -m scripts.benchmark_storage_backends --backend json
     python -m scripts.benchmark_storage_backends --backend sqlite
-    python -m scripts.benchmark_storage_backends --backend postgresql --reset-postgresql
 """
 
 from __future__ import annotations
@@ -30,14 +29,12 @@ from app.schemas.eval import load_rag_eval_dataset
 from app.services.llm.provider import DEFAULT_PROVIDER_NAME
 from app.services.rag import answer_question
 
-BackendName = Literal["json", "sqlite", "postgresql"]
+BackendName = Literal["json", "sqlite"]
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 _SEED_LITERATURE_PATH = _BACKEND_ROOT / "data" / "literature" / "sample_ad_literature.json"
 _SEED_CHUNK_PATH = _BACKEND_ROOT / "data" / "literature" / "sample_ad_chunks.json"
 _EVAL_DATA_PATH = _BACKEND_ROOT / "data" / "evals" / "rag_ad_eval_questions.json"
-_DEFAULT_POSTGRES_DSN = "postgresql://qiyan_dev:qiyan_dev_pass@localhost:5432/qiyan_nexus"
-_DEFAULT_POSTGRES_CONNECT_TIMEOUT_SECONDS = 5
 
 
 @dataclass(frozen=True)
@@ -72,9 +69,6 @@ def _copy_seed_files(target_dir: Path) -> tuple[Path, Path]:
 @contextmanager
 def _backend_context(
     backend: BackendName,
-    *,
-    postgres_dsn: str,
-    reset_postgresql: bool,
 ) -> Iterator[BackendContext]:
     with tempfile.TemporaryDirectory(prefix=f"qiyan-{backend}-bench-") as tmp_raw:
         tmp = Path(tmp_raw)
@@ -112,79 +106,10 @@ def _backend_context(
                     ),
                 ]
             )
-        else:
-            os.environ["QIYAN_POSTGRES_DSN"] = postgres_dsn
-            _assert_postgresql_ready(postgres_dsn)
-            if reset_postgresql:
-                _reset_postgresql_database(postgres_dsn)
-            from app.repositories.postgres_chunk import PostgresChunkRepository
-            from app.repositories.postgres_literature import PostgresLiteratureRepository
-
-            context = BackendContext(
-                literature=PostgresLiteratureRepository(
-                    dsn=postgres_dsn,
-                    seed_path=literature_seed,
-                ),
-                chunks=PostgresChunkRepository(dsn=postgres_dsn, seed_path=chunk_seed),
-                close_callbacks=close_callbacks,
-            )
-            close_callbacks.extend(
-                [
-                    lambda: (
-                        context.chunks.close()
-                        if isinstance(context.chunks, PostgresChunkRepository)
-                        else None
-                    ),
-                    lambda: (
-                        context.literature.close()
-                        if isinstance(context.literature, PostgresLiteratureRepository)
-                        else None
-                    ),
-                ]
-            )
-
         try:
             yield context
         finally:
             context.close()
-
-
-def _postgres_connect_timeout() -> int:
-    raw = os.getenv("QIYAN_POSTGRES_CONNECT_TIMEOUT")
-    if raw is None or raw.strip() == "":
-        return _DEFAULT_POSTGRES_CONNECT_TIMEOUT_SECONDS
-    try:
-        return int(raw)
-    except ValueError:
-        return _DEFAULT_POSTGRES_CONNECT_TIMEOUT_SECONDS
-
-
-def _assert_postgresql_ready(dsn: str) -> None:
-    import psycopg
-
-    try:
-        with psycopg.connect(dsn, connect_timeout=_postgres_connect_timeout()) as conn:
-            conn.execute("SELECT 1").fetchone()
-    except Exception as exc:
-        raise RuntimeError(
-            "PostgreSQL is not reachable. Start "
-            "infra/docker-compose.postgresql-spike.yml and retry."
-        ) from exc
-
-
-def _reset_postgresql_database(dsn: str) -> None:
-    from app.repositories.postgres_common import create_postgres_pool, ensure_postgres_schema
-
-    pool = create_postgres_pool(dsn, min_size=0, max_size=2)
-    try:
-        ensure_postgres_schema(pool)
-        with pool.connection() as conn:
-            conn.execute(
-                "TRUNCATE TABLE chunks, literature, network_tasks RESTART IDENTITY CASCADE"
-            )
-            conn.commit()
-    finally:
-        pool.close()
 
 
 def _percentile(values: list[float], quantile: float) -> float:
@@ -237,14 +162,8 @@ def _run_backend_benchmark(
     *,
     iterations: int,
     rag_runs: int,
-    postgres_dsn: str,
-    reset_postgresql: bool,
 ) -> list[Measurement]:
-    with _backend_context(
-        backend,
-        postgres_dsn=postgres_dsn,
-        reset_postgresql=reset_postgresql,
-    ) as context:
+    with _backend_context(backend) as context:
         literature = context.literature
         chunks = context.chunks
         questions = load_rag_eval_dataset(_EVAL_DATA_PATH)
@@ -333,28 +252,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--backend",
-        choices=["json", "sqlite", "postgresql", "all"],
+        choices=["json", "sqlite", "all"],
         default="all",
         help="storage backend to benchmark",
     )
     parser.add_argument("--iterations", type=int, default=50)
     parser.add_argument("--rag-runs", type=int, default=3)
-    parser.add_argument(
-        "--postgres-dsn",
-        default=os.getenv("QIYAN_POSTGRES_DSN", _DEFAULT_POSTGRES_DSN),
-        help="PostgreSQL DSN for --backend postgresql",
-    )
-    parser.add_argument(
-        "--reset-postgresql",
-        action="store_true",
-        help="truncate spike PostgreSQL tables before benchmarking",
-    )
     parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     args = parser.parse_args()
 
     backends: list[BackendName]
     if args.backend == "all":
-        backends = ["json", "sqlite", "postgresql"]
+        backends = ["json", "sqlite"]
     else:
         backends = [args.backend]
 
@@ -366,8 +275,6 @@ def main() -> int:
                 backend,
                 iterations=args.iterations,
                 rag_runs=args.rag_runs,
-                postgres_dsn=args.postgres_dsn,
-                reset_postgresql=args.reset_postgresql,
             )
         except Exception as exc:
             failures[backend] = f"{type(exc).__name__}: {exc}"

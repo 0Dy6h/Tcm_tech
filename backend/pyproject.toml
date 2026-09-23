@@ -35,10 +35,6 @@ models = [
     "transformers>=5.10.4",
     "torch",
 ]
-postgresql = [
-    "psycopg[binary,pool]>=3.1.0",
-]
-
 [tool.setuptools]
 packages = ["app"]
 
@@ -69,5 +65,5 @@ module = "tests.*"
 ignore_errors = true
 
 [[tool.mypy.overrides]]
-module = ["psycopg", "psycopg.*", "psycopg_pool", "scipy", "scipy.*", "slowapi", "slowapi.*"]
+module = ["scipy", "scipy.*", "slowapi", "slowapi.*"]
 ignore_missing_imports = true

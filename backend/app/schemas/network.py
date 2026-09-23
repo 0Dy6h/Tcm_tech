@@ -770,7 +770,7 @@ class NetworkAssemblyConsumeAccepted(BaseModel):
 
     ``backend_fidelity`` marks the storage boundary honestly (D7): ``preview``
     (JSON) only guarantees same-process same-instance exactly-once;
-    ``production`` (SQLite/PostgreSQL) enforces it through database
+    ``production`` (SQLite) enforces it through database
     transactions and unique constraints.
     """
 
