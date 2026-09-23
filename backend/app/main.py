@@ -1,5 +1,7 @@
 import logging
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +20,7 @@ from app.core.access_control import LOCAL_FRONTEND_ORIGINS, install_access_token
 from app.core.config import get_settings
 from app.core.logging_config import init_logging
 from app.core.logging_middleware import RequestLoggingMiddleware
+from app.core.model_warmup import start_model_warmup, warmup_status
 
 if "pytest" not in sys.modules:
     init_logging()
@@ -31,7 +34,17 @@ MAX_REQUEST_SIZE = 50 * 1024 * 1024
 # before the server accepts health checks or business traffic.
 _startup_settings = get_settings()
 
-app = FastAPI(title=_startup_settings.app_name)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Preload real embedding / NLI models in a daemon thread when enabled;
+    # a no-op with the default hashing embedding and NLI off.
+    start_model_warmup(_startup_settings.nli_backend)
+    yield
+
+
+app = FastAPI(title=_startup_settings.app_name, lifespan=lifespan)
 
 
 class _RequestBodyTooLarge(MultiPartException):
@@ -171,8 +184,12 @@ app.include_router(metrics_router)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, str | bool | None]:
+    # Keep ``status`` / ``service`` stable: external launchers fingerprint on them.
+    # ``embedding_ready`` / ``nli_ready``: null = model path disabled,
+    # false = still loading (or failed), true = preloaded.
     return {
         "status": "ok",
         "service": "qiyan-nexus-api",
+        **warmup_status(),
     }

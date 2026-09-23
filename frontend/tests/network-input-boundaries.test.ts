@@ -42,9 +42,9 @@ test("analyze submit failures distinguish server validation from transport error
   assert.match(clientSource, /error instanceof ApiStatusError && error\.status === 422/);
   assert.match(clientSource, /提交被服务端校验拒绝：请核对分析对象与研究表型（4-200 字）、查询日期后重试。/);
   // other HTTP statuses surface the status code honestly
-  assert.match(clientSource, /提交分析任务失败（HTTP \$\{error\.status\}），请稍后重试。/);
+  assert.match(clientSource, /提交分析任务失败（HTTP \$\{error\.status\}），请稍后重试；/);
   // the backend-down claim is reserved for genuine transport failures (non-ApiStatusError)
-  assert.match(clientSource, /提交分析任务失败，请确认后端服务已启动。/);
+  assert.match(clientSource, /提交分析任务失败，请确认后端服务已启动/);
 });
 
 test("network POST fetchers surface HTTP status via ApiStatusError", () => {

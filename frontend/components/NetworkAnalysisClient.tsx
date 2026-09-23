@@ -401,7 +401,7 @@ export default function NetworkAnalysisClient() {
         }
         setProgress(polled.progress);
         if (polled.status === "failed") {
-          setErrorMessage(polled.error ?? "网络分析任务失败，请检查真实数据来源与缓存配置。");
+          setErrorMessage(polled.error ?? "网络分析任务在后端执行失败。请点击重新分析重试；若反复失败，请检查后端日志中的数据来源与缓存配置。");
           setPhase("error");
           return;
         }
@@ -420,9 +420,9 @@ export default function NetworkAnalysisClient() {
           setErrorMessage("未找到该任务：任务可能不存在、已被删除，或不属于当前环境。");
           setErrorHint({ href: "/tasks", label: "← 回到我的研究" });
         } else if (error instanceof ApiStatusError) {
-          setErrorMessage(`轮询任务结果失败（HTTP ${error.status}），请稍后重试。`);
+          setErrorMessage(`轮询任务结果失败（HTTP ${error.status}），请稍后重试；若持续出现，请检查后端服务（端口 8010）日志。`);
         } else {
-          setErrorMessage("轮询任务结果失败，请确认后端服务已启动。");
+          setErrorMessage("轮询任务结果失败，请确认后端服务已启动（默认 http://127.0.0.1:8010/health）且网络可达，然后重试。");
         }
         setPhase("error");
         return;
@@ -430,7 +430,7 @@ export default function NetworkAnalysisClient() {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }
     if (mountedRef.current) {
-      setErrorMessage("任务在限定轮询次数内未完成，请稍后重试。");
+      setErrorMessage("任务在限定时间内未完成：任务仍可能在后台运行，请稍后到「我的研究」查看结果，或重新提交。");
       setPhase("error");
     }
   }
@@ -736,9 +736,9 @@ export default function NetworkAnalysisClient() {
           "提交被服务端校验拒绝：请核对分析对象与研究表型（4-200 字）、查询日期后重试。",
         );
       } else if (error instanceof ApiStatusError) {
-        setErrorMessage(`提交分析任务失败（HTTP ${error.status}），请稍后重试。`);
+        setErrorMessage(`提交分析任务失败（HTTP ${error.status}），请稍后重试；若持续出现，请检查后端服务（端口 8010）日志。`);
       } else {
-        setErrorMessage("提交分析任务失败，请确认后端服务已启动。");
+        setErrorMessage("提交分析任务失败，请确认后端服务已启动（默认 http://127.0.0.1:8010/health）且网络可达，然后重试。");
       }
       setPhase("error");
     }

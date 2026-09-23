@@ -62,10 +62,10 @@ export function describeApiError(error: unknown, action: string): string {
       422: "提交内容未通过校验，请检查输入后重试。",
       429: "请求过于频繁，请稍后重试。",
     };
-    return `${action}失败（HTTP ${error.status}），${hints[error.status] ?? "服务端暂时无法处理，请稍后重试。"}`;
+    return `${action}失败（HTTP ${error.status}），${hints[error.status] ?? "服务端暂时无法处理，请稍后重试；若持续出现，请检查后端服务（端口 8010）日志。"}`;
   }
   return error instanceof TypeError
-    ? `${action}失败，请确认后端服务已启动且网络可达。`
+    ? `${action}失败，请确认后端服务已启动（默认端口 8010）且网络可达，然后重试。`
     : `${action}失败，请稍后重试。`;
 }
 

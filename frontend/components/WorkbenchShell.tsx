@@ -14,7 +14,7 @@ const navItems = [
   { href: "/tasks", label: "我的研究" },
   { href: "/literature", label: "文献检索" },
   { href: "/rag", label: "证据问答" },
-  { href: "/compliance", label: "合规边界" },
+  // Dev/review-only pages (/compliance, /evals/rag-ad) stay reachable by URL but are kept out of primary nav.
 ];
 
 const railSignals = [

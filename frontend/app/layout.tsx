@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "antd/dist/reset.css";
 import "./workbench.css";
 import WorkbenchShell from "../components/WorkbenchShell";
+import MotionProvider from "../components/MotionProvider";
 
 export const metadata: Metadata = {
   title: "Qiyan Nexus",
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="zh-CN">
       <body>
-        <WorkbenchShell>{children}</WorkbenchShell>
+        <MotionProvider>
+          <WorkbenchShell>{children}</WorkbenchShell>
+        </MotionProvider>
       </body>
     </html>
   );

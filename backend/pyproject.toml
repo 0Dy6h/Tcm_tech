@@ -11,7 +11,6 @@ dependencies = [
     "numpy>=1.26,<3",
     "pydantic>=2.6,<3",
     "pypdf>=6.16.1",
-    "pytest>=8.0.0",
     "python-multipart>=0.0.31",
     "scipy>=1.11.0",
     "slowapi>=0.1.9",
@@ -26,7 +25,15 @@ dev = [
     "pydantic-settings>=2.14.2",
     "sentence-transformers>=3.0.0",
     "transformers>=5.10.4",
+    "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
+]
+# Real models: needed at runtime only when QIYAN_EMBEDDING_BACKEND=bge|multilingual_bge_m3
+# or QIYAN_NLI_BACKEND=transformers (NLI also needs torch).
+models = [
+    "sentence-transformers>=3.0.0",
+    "transformers>=5.10.4",
+    "torch",
 ]
 postgresql = [
     "psycopg[binary,pool]>=3.1.0",

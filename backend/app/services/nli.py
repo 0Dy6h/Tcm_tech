@@ -53,6 +53,10 @@ def _load_nli_pipeline(model_name: str) -> Any:
     transformers or downloads weights.
     """
 
+    cached = _PIPELINE_CACHE.get(model_name)
+    if cached is not None:
+        return cached
+
     import torch  # type: ignore[import-not-found, unused-ignore]
     from transformers import (  # type: ignore[import-not-found, unused-ignore]
         AutoModelForSequenceClassification,
@@ -62,7 +66,13 @@ def _load_nli_pipeline(model_name: str) -> Any:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSequenceClassification.from_pretrained(model_name)
     model.eval()
-    return tokenizer, model, torch
+    loaded = (tokenizer, model, torch)
+    _PIPELINE_CACHE[model_name] = loaded
+    return loaded
+
+
+# Process-wide cache shared by the lifespan warm-up and per-request backends.
+_PIPELINE_CACHE: dict[str, Any] = {}
 
 
 class TransformersNliBackend:

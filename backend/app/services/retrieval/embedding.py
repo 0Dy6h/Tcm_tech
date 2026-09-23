@@ -84,11 +84,22 @@ def _load_sentence_transformer(model_name: str) -> Any:
     never imports or downloads the model.
     """
 
+    cached = _MODEL_CACHE.get(model_name)
+    if cached is not None:
+        return cached
+
     from sentence_transformers import (  # type: ignore[import-untyped, import-not-found, unused-ignore]
         SentenceTransformer,
     )
 
-    return SentenceTransformer(model_name)
+    model = SentenceTransformer(model_name)
+    _MODEL_CACHE[model_name] = model
+    return model
+
+
+# Process-wide cache so the lifespan warm-up and per-request backends share one
+# loaded model instead of reloading weights for every new backend instance.
+_MODEL_CACHE: dict[str, Any] = {}
 
 
 class SentenceTransformerEmbeddingBackend:

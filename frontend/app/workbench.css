@@ -1049,3 +1049,35 @@ body {
     text-align: left;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Motion system (2026-09-23, mimo-inspired): tokens, reveal-on-enter, card lift
+   -------------------------------------------------------------------------- */
+:root {
+  --ease-std: cubic-bezier(.4, 0, .2, 1);
+  --ease-out-quint: cubic-bezier(.23, 1, .32, 1);
+  --ease-out-expo: cubic-bezier(.16, 1, .3, 1);
+  --dur-xs: .12s; --dur-s: .2s; --dur-m: .3s; --dur-l: .5s; --dur-xl: .8s;
+  --rise: 32px; --stagger: 70ms;
+}
+.m-reveal {
+  opacity: 0;
+  transform: translateY(var(--rise));
+  transition: opacity .7s var(--ease-out-expo), transform .7s var(--ease-out-expo);
+  transition-delay: calc(var(--i, 0) * var(--stagger));
+}
+.m-reveal.is-in { opacity: 1; transform: none; }
+.workbench-page .ant-card {
+  transition: transform var(--dur-s) var(--ease-std), box-shadow var(--dur-s) var(--ease-std),
+    border-color var(--dur-s) var(--ease-std);
+}
+.workbench-page .ant-card.m-reveal {
+  transition: opacity .7s var(--ease-out-expo), transform .7s var(--ease-out-expo);
+  transition-delay: calc(var(--i, 0) * var(--stagger));
+}
+.workbench-page .ant-card:hover { transform: translateY(-2px); box-shadow: var(--qiyan-shadow-pop); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-reveal, .m-reveal.is-in { opacity: 1; transform: none; transition: none; }
+  .workbench-page .ant-card, .workbench-page .ant-card:hover { transform: none; transition: none; }
+}
