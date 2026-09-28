@@ -497,9 +497,7 @@ def _validate_compound_import(
     ):
         if result.get(field) != expected:
             expected_label = "null" if expected is None else "[]"
-            issues.append(
-                f"compound import snapshot-only output requires {field}={expected_label}"
-            )
+            issues.append(f"compound import snapshot-only output requires {field}={expected_label}")
     warnings = result.get("warnings")
     if not isinstance(warnings, list) or _SNAPSHOT_ONLY_NETWORK_BLOCKER not in warnings:
         issues.append(

@@ -134,8 +134,10 @@ def main() -> int:
 
     if args.queries_file is not None:
         raw_queries = json.loads(args.queries_file.read_text(encoding="utf-8"))
-        if not isinstance(raw_queries, list) or not raw_queries or not all(
-            isinstance(q, str) and q.strip() for q in raw_queries
+        if (
+            not isinstance(raw_queries, list)
+            or not raw_queries
+            or not all(isinstance(q, str) and q.strip() for q in raw_queries)
         ):
             print("Refused to load queries-file: expected a non-empty JSON list of strings.")
             return 2

@@ -52,9 +52,17 @@
 
 本会话提交链（全部已入库、工作树干净）：`bd687f8`（docs: AGENTS.md 补 frontend/AGENTS.md 注记，/init 收尾）→ `dc2d01d`（feat: 审计 HMAC 切片本体）→ `35d92eb`（test: /review 整改）。终态门禁：后端 ruff format/check + mypy strict 80 文件 + **pytest 1039 通过 + 1 skipped**；前端 309/0 + typecheck + build；8010/3000 无监听残留（切片本体 smoke 跑过并 `-Stop` 释放，整改笔零 app 运行时 diff 免跑）；smoke 隔离 runtime `.tmp/trial-audit` 已随收工清理。
 
+## 第六会话（同日，继续推进开发——技术债清偿，零新切片）
+
+「继续推进开发」自主交接口径：本 handoff 遗留候选清单逐项排查——#1 真实数据闭环需 operator 拍板数据源与 manifest、#2 检索迭代/UX 循环由研究者发起、#4 审计链外锚涉 D4 语义需研究者拍板，均不可自主开工；唯一可动手项即 #3 前半（scripts format 漂移）。plans 目录 grep 实证无 `status: planned` 未开工切片，如实零新切片。
+
+- `b58fc46`：/init 收尾——AGENTS.md 快速导航补 `ATLAS.md` 行（本机 atlas 启动器文档此前无导航入口）；/init 核对轮同时实证 47 前端测试文件 / 23 源码断言测试 / 13 network 子模块 / 四 validator / tcmtech shim 缺失注记全部与仓库现状一致，其余零修订。
+- 随后提交：`scripts/` 三文件（seed_pubmed_corpus / validate_network_target_lineage / validate_omics_import）ruff format 漂移清偿，纯格式 diff（条件括号化、短 `issues.append` 合行、dict 推导收行），问题字符串与控制流零变化；其中两个 validate 脚本被测试导入，全量 pytest 真实覆盖。
+- 门禁：后端四项全绿（format 166 文件 / check / mypy strict 80 文件 / pytest **1039 通过 + 1 skipped** 基线零漂移）；前端零改动认证 test 309/0 + typecheck + build 全绿（`next-env.d.ts` 本轮无漂移）；smoke 免跑（零 `app/` 运行时 diff）。
+
 ## 遗留与下一个切片候选
 
 1. **真实科研数据闭环**（产品主轴缺口，最高优先）：仍需 operator 拍板数据源与 trusted manifest，随后端到端走 verified 导入 → 判定 → seal → consume → 独立 validator 全链（本切片后可加验 audit 链）。
 2. 检索质量下一轮迭代 / 前端 UX 新一轮循环（按既往节奏，由研究者发起）。
-3. 小额技术债（非阻塞）：`scripts/` 三个既有文件 format 漂移；audit HMAC 密钥轮换/多 key 并验未设计（单 env 单 key，operator 事项）。
+3. 小额技术债（非阻塞）：`scripts/` 三个既有文件 format 漂移已由第六会话清偿（见上）；audit HMAC 密钥轮换/多 key 并验未设计（单 env 单 key，operator 事项）。
 4. **审计链外锚（尾部截断检测，🟠1 整改后立项）**：自洽链的检测盲区已被边界测试锁定；候选方案为 plan seal 时绑定全流事件元组（涉 D4 policy v2 语义，会改 plan_id 派生）或独立 append 计数器文件（新存储面），需研究者拍板后方可开工。

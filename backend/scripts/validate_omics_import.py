@@ -125,9 +125,7 @@ def validate(store: dict[str, Any]) -> tuple[bool, list[str]]:
         else:
             annotation_path = omics_dir / "artifacts" / f"{annotation_sha256}.bin"
             if not annotation_path.is_file():
-                issues.append(
-                    f"platform annotation bytes missing for sha256 {annotation_sha256}"
-                )
+                issues.append(f"platform annotation bytes missing for sha256 {annotation_sha256}")
             else:
                 actual = hashlib.sha256(annotation_path.read_bytes()).hexdigest()
                 if actual != annotation_sha256:
@@ -164,9 +162,7 @@ def validate(store: dict[str, Any]) -> tuple[bool, list[str]]:
         },
         "platform_annotation": None
         if platform_annotation is None
-        else {
-            key: platform_annotation.get(key) for key in ("filename", "size_bytes", "format")
-        },
+        else {key: platform_annotation.get(key) for key in ("filename", "size_bytes", "format")},
         "analysis_context": snapshot.get("analysis_context"),
         "edge_mapping": snapshot.get("edge_mapping"),
     }
