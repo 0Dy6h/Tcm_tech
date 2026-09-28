@@ -22,6 +22,7 @@
 | 当前事实源 | `docs/current-state.md` | 当前能力边界、事实源优先级、标准验证命令 |
 | 入口 | `README.md` | 每个已实现 endpoint 的 curl 示例 |
 | 命令与架构细节 | `CLAUDE.md` | 后端分层、RAG 管线、PDF 流、前端测试机制、codegraph 决策树；若命令冲突，以本文件的 Windows PowerShell 写法为准 |
+| 本机启动器 | `ATLAS.md` | 「项目星球」atlas 启动器：托管本项目 8010/3000 服务的启停/状态/日志；遇到 atlas、项目星球或服务「纳入托管」相关引用时读它 |
 | 领域语言 | `CONTEXT.md` | TCM 术语表、共享语言 |
 | 长期模块路线图 | `docs/adr/0010-research-workbench-module-roadmap.md`、`0017-network-pharmacology-first-product-contract.md`、`0018-omics-strategy-platform-contract.md` | 证据工作台、网络药理学、分子对接/MD 的分阶段边界与概念预留；0017 是当前产品主轴契约基线，0018 是组学策略方向演进 |
 | 最近交接 | `docs/handoffs/` | 越新的 handoff 越接近当前事实，用于跨会话续接 |
