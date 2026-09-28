@@ -108,6 +108,7 @@ pnpm preview:stop
 
 - `pnpm e2e`（Playwright）不在每次提交门禁内，需先 `pnpm exec playwright install chromium` 及系统库，按 `frontend/e2e/README.md`。
 - 浏览器自动化走查本项目 dev 页面时，role 定位点击可能假超时（工具行为非产品缺陷）：`elementFromPoint` 验证无遮挡后改用 evaluate 触发 DOM click 即可。
+- `frontend/AGENTS.md` 是 `next dev` 自动写入并重加的 Next.js agent 规则块，勿从 diff 手删（删了只会重新出现，随改动一起提交即保持树干净）；它警告本仓库 Next.js 版本与训练数据存在破坏性差异，写前端代码前先读 `node_modules/next/dist/docs/` 对应指南并留意 deprecation 提示。
 - GitHub Actions CI 位于 `.github/workflows/ci.yml`，规则说明见 `.github/workflows/README.md`；没有 `.cursor` 规则。提交前仍必须本地手跑上述 PowerShell / pnpm 门禁，不能把远端 CI 当作首次验证。
 
 ## 改代码前必看的硬约束（测试会卡）
