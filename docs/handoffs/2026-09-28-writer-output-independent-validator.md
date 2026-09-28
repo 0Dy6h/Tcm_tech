@@ -2,7 +2,9 @@
 
 ## 背景与当日上下文
 
-本日第四次会话，执行「继续优化/开发」（自主交接口径：选已拍板下一步、零新增拍板、门禁+走查+收工全口径）。切片来源：writer 消费契约决策包 D9=B（2026-08-16 拍板「validator 后续切片」），在 `docs/current-state.md` 未完成边界中明示为遗留——候选清单里真实数据闭环需 operator 拍板数据源与 manifest、检索迭代与 UX 循环均无 pre-approved plan，故 D9 validator 是唯一可自主开工的已拍板切片。同日时间线：network 拆分收口 → façade 私有面收缩（6532ca8）→ /review 整改（1896cac）→ 本切片。另有一笔独立 docs 提交 d9b706d（AGENTS.md 补 pwsh 宿主注记，/init 遗留）。
+本日第四次会话，执行「继续优化/开发」（自主交接口径：选已拍板下一步、零新增拍板、门禁+走查+收工全口径）。切片来源：writer 消费契约决策包 D9=B（2026-08-16 拍板「validator 后续切片」），在 `docs/current-state.md` 未完成边界中明示为遗留——候选清单里真实数据闭环需 operator 拍板数据源与 manifest、检索迭代与 UX 循环均无 pre-approved plan，故 D9 validator 是唯一可自主开工的已拍板切片。同日时间线：network 拆分收口 → façade 私有面收缩（6532ca8）→ /review 整改（1896cac）→ 本会话。另有一笔独立 docs 提交 d9b706d（AGENTS.md 补 pwsh 宿主注记，/init 遗留）。
+
+**本会话提交链（收工核对，全部已入库、工作树干净）**：`d9b706d`（docs: pwsh 宿主注记）→ `32cf2ae`（feat: validator 切片本体）→ `291eb1c`（test: 一轮 /review 整改）→ `37cda09`（test: 二轮 /review 整改）。终态门禁：后端 ruff format/check + mypy strict 79 文件 + **pytest 1002 通过 + 1 skipped**；前端 309/0 + typecheck + build；8010/3000 无监听残留；smoke 全程免跑（四笔提交均零 `app/` 运行时 diff）。
 
 ## 落地（TDD：篡改矩阵先红后绿）
 
