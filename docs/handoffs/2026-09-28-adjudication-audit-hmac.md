@@ -60,6 +60,14 @@
 - 随后提交：`scripts/` 三文件（seed_pubmed_corpus / validate_network_target_lineage / validate_omics_import）ruff format 漂移清偿，纯格式 diff（条件括号化、短 `issues.append` 合行、dict 推导收行），问题字符串与控制流零变化；其中两个 validate 脚本被测试导入，全量 pytest 真实覆盖。
 - 门禁：后端四项全绿（format 166 文件 / check / mypy strict 80 文件 / pytest **1039 通过 + 1 skipped** 基线零漂移）；前端零改动认证 test 309/0 + typecheck + build 全绿（`next-env.d.ts` 本轮无漂移）；smoke 免跑（零 `app/` 运行时 diff）。
 
+### /review 整改（紧随 2d15841，同日第六会话）
+
+/review 对 b58fc46 + 2d15841 给出 0🔴/0🟠/2🟡/1⚪，全部闭环（测试 + 文档，零 app/ 运行时 diff）：
+
+- **🟡1 AST 证据落档**：三脚本改前/改后 git blob（b58fc46 版 vs 工作树）`ast.dump` 全量比对**逐字节同一**（20172 / 116803 / 26719 字符三对全等），「纯格式零语义变化」从目测声明升级为可审计事实。惯例化：后续「纯格式清偿」类提交把 AST blob 比对做成提交前固定动作，证据行随提交信息落档（本整改提交信息即示范）。
+- **🟡2 `main()` queries_file 分支直接覆盖**（`test_seed_pubmed_corpus.py` 3→9，+6）：4 拒绝形态参数化（非 list / 空 list / 空白串 query / 非字符串元素）断言 return 2 + 拒绝文案 + sync 零调用；成功路径 monkeypatch `sync_pubmed`（函数级 late-binding，main 内 `from ... import` 调用时解析）断言逐 query 按序同步 + return 0；畸形 JSON 崩溃形态钉死（`json.JSONDecodeError` 传播 = traceback 非零退出，两种形态都 fail closed，未来改 catch→return 2 须有意识翻转）。拒绝测试内置 sync 哨兵：分支被击穿时在真实 NCBI 请求发出前以 AssertionError 干净变红，零网络副作用。**两变异验证红因核对**：删 `q.strip()` 子句 → 仅 whitespace 案红（`assert 0 == 2`，哨兵拦截后 main 按失败 query 继续故返回 0）；条件反转 → 2 拒绝案 + 成功案红（`{}`/`[]` 仍 refusal 保持绿）。cp 备份还原后 `git status scripts/` 零输出（逐字节等同已提交版）。
+- **⚪1 CRLF 警告**：如实不处理——ruff 写 LF + git autocrlf 转换提示是 Windows 常态，blob 层零影响（与既有 CRLF 坑记录一致）。
+
 ## 遗留与下一个切片候选
 
 1. **真实科研数据闭环**（产品主轴缺口，最高优先）：仍需 operator 拍板数据源与 trusted manifest，随后端到端走 verified 导入 → 判定 → seal → consume → 独立 validator 全链（本切片后可加验 audit 链）。
