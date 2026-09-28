@@ -48,6 +48,10 @@
 - 前端零改动认证：test 309/0 + typecheck + build 全绿。
 - smoke 免跑：本轮零 `app/` 运行时 diff（独立脚本 + 测试 + 文档 + protocols docstring）。
 
+## /end 收工核对（同日第五会话，2026-09-28）
+
+本会话提交链（全部已入库、工作树干净）：`bd687f8`（docs: AGENTS.md 补 frontend/AGENTS.md 注记，/init 收尾）→ `dc2d01d`（feat: 审计 HMAC 切片本体）→ `35d92eb`（test: /review 整改）。终态门禁：后端 ruff format/check + mypy strict 80 文件 + **pytest 1039 通过 + 1 skipped**；前端 309/0 + typecheck + build；8010/3000 无监听残留（切片本体 smoke 跑过并 `-Stop` 释放，整改笔零 app 运行时 diff 免跑）；smoke 隔离 runtime `.tmp/trial-audit` 已随收工清理。
+
 ## 遗留与下一个切片候选
 
 1. **真实科研数据闭环**（产品主轴缺口，最高优先）：仍需 operator 拍板数据源与 trusted manifest，随后端到端走 verified 导入 → 判定 → seal → consume → 独立 validator 全链（本切片后可加验 audit 链）。
