@@ -68,6 +68,10 @@
 - **🟡2 `main()` queries_file 分支直接覆盖**（`test_seed_pubmed_corpus.py` 3→9，+6）：4 拒绝形态参数化（非 list / 空 list / 空白串 query / 非字符串元素）断言 return 2 + 拒绝文案 + sync 零调用；成功路径 monkeypatch `sync_pubmed`（函数级 late-binding，main 内 `from ... import` 调用时解析）断言逐 query 按序同步 + return 0；畸形 JSON 崩溃形态钉死（`json.JSONDecodeError` 传播 = traceback 非零退出，两种形态都 fail closed，未来改 catch→return 2 须有意识翻转）。拒绝测试内置 sync 哨兵：分支被击穿时在真实 NCBI 请求发出前以 AssertionError 干净变红，零网络副作用。**两变异验证红因核对**：删 `q.strip()` 子句 → 仅 whitespace 案红（`assert 0 == 2`，哨兵拦截后 main 按失败 query 继续故返回 0）；条件反转 → 2 拒绝案 + 成功案红（`{}`/`[]` 仍 refusal 保持绿）。cp 备份还原后 `git status scripts/` 零输出（逐字节等同已提交版）。
 - **⚪1 CRLF 警告**：如实不处理——ruff 写 LF + git autocrlf 转换提示是 Windows 常态，blob 层零影响（与既有 CRLF 坑记录一致）。
 
+### /end 收工核对（同日第六会话）
+
+本会话提交链（全部已入库、工作树干净）：`b58fc46`（docs: AGENTS.md 补 ATLAS.md 导航行，/init 收尾）→ `2d15841`（chore: scripts 三文件 format 漂移清偿 + 第六会话记录）→ `b9ba467`（test: /review 整改——queries_file 分支 6 测试 + 两变异验证红因核对 + AST 证据落档）。终态门禁：后端 ruff format/check + mypy strict 80 文件 + **pytest 1045 通过 + 1 skipped**（新基线锚点，1039 + 6）；前端 309/0 + typecheck + build；8010/3000 无监听残留（本会话零服务启动，smoke 全程免跑）；`.tmp/` 本会话零新增（历史遗留目录未动）；会话临时产物（/tmp 变异验证备份 1 + 旧版 blob 3）已清。经验迭代：AST blob 比对惯例化与 sync 哨兵技法已记入 agent 记忆（refactor-review-ast-fidelity），夜班基线锚点更新至本提交；skill 评估：无本项目专属 skill、工作流已由既有记忆覆盖，不需新建。
+
 ## 遗留与下一个切片候选
 
 1. **真实科研数据闭环**（产品主轴缺口，最高优先）：仍需 operator 拍板数据源与 trusted manifest，随后端到端走 verified 导入 → 判定 → seal → consume → 独立 validator 全链（本切片后可加验 audit 链）。
