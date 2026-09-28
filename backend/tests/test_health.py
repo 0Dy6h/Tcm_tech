@@ -18,7 +18,6 @@ def test_health_returns_service_status():
     assert body["nli_ready"] is None
 
 
-
 def test_model_warmup_is_noop_by_default(monkeypatch):
     from app.core import model_warmup
 

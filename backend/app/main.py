@@ -35,7 +35,6 @@ MAX_REQUEST_SIZE = 50 * 1024 * 1024
 _startup_settings = get_settings()
 
 
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Preload real embedding / NLI models in a daemon thread when enabled;
