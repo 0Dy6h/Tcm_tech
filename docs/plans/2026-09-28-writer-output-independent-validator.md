@@ -33,6 +33,7 @@
    - `target_evidence_type ∈ {"predicted", "mock"}`（装配不产 known_activity/mixed）；
    - mock 行链 `evidence_level == "mock_inferred"`、predicted 行链 `evidence_level == "predicted"` 且 `evidence_refs == []`（不上浮 experimental / literature_supported）；
    - `related_entity_ids[0]` 必须是 plan `selected_intersections` 中某条的 `lineage_row_id`，且该链 `target` 等于该条 `canonical_symbol`、该条 `selected_disease_lineage_row_ids` ⊆ `related_entity_ids`、`selected_compound_lineage_row_ids` 与 `related_entity_ids` 有交。
+7. 链数量完备性（/review 整改补）：`len(chains)` 必须等于 Σ 每个 selection 的 `len(selected_compound_lineage_row_ids)`（2026-09-11 派生规则确定性可复算）——封住「少产链」类 producer 回归，per-chain 诚实性检查对系统性缺失失明。
 
 ### 3.2 消费记录（`consumptions[*]`）
 
@@ -46,7 +47,8 @@
 ## 4. 测试与验收
 
 - TDD：先在 `tests/test_validate_network_assembly_plan.py` 新增消费流测试（真实 API 流：seal → consume → 组包），确认对扩展字段 validator 暂不校验时变红，再实现转绿。
-- 变异矩阵：每条校验规则至少一个 evidence 级篡改变体，断言拒绝且 issue 文本命中预期子串（核对红原因，不接受「反正红了」）。
+- 变异矩阵：每条校验规则至少一个 evidence 级篡改变体，断言拒绝且 issue 文本命中预期子串（核对红原因，不接受「反正红了」）。32cf2ae 首版仅 15 突变覆盖 11/22 规则，/review 整改后补齐至 31 突变全规则覆盖（含链数量删链突变）。
+- 畸形扩展包降级为 issue 而非崩溃；孤儿 `output_payload` 显式报 issue。
 - 向后兼容：既有 plan-only 测试零改动通过。
 
 ## 5. 验收口径

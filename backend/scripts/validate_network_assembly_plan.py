@@ -30,6 +30,9 @@ consumption binding and the structural honesty of the assembled chains are
 re-verified independently. All three fields are optional; a plan-only package
 stays valid.
 
+The advisory ``warnings`` texts on an output are intentionally not
+content-checked: they are producer copy, not integrity bindings.
+
 The package intentionally excludes reviewer identity: this is the public
 consistency path. Privileged audit of reviewer identity is a separate slice.
 """
@@ -211,7 +214,20 @@ def _validate_output_chains(
     issues: list[str],
 ) -> None:
     selections = {item.get("lineage_row_id"): item for item in selected if isinstance(item, dict)}
-    for index, chain in enumerate(_rows(output.get("chains"), "output.chains")):
+    # Completeness: the 2026-09-11 derivation is deterministic — one chain per
+    # (selection × selected compound row). Per-chain honesty checks below only
+    # cover chains that exist; this count closes the "silently missing chain"
+    # producer-regression class.
+    expected_count = sum(
+        len(item.get("selected_compound_lineage_row_ids") or []) for item in selections.values()
+    )
+    chains = _rows(output.get("chains"), "output.chains")
+    if len(chains) != expected_count:
+        issues.append(
+            f"output chain count {len(chains)} does not match the count {expected_count} "
+            "derived from plan selections"
+        )
+    for index, chain in enumerate(chains):
         if chain.get("herb") != "":
             issues.append(f"output chain herb must be empty (chain {index})")
         if chain.get("formula") is not None:
@@ -306,7 +322,7 @@ def _validate_consumptions(
                     issues.append(
                         f"consumption.{field} does not match the referenced output ({record})"
                     )
-            consumed_output_ids.add(str(output_id))
+            consumed_output_ids.add(output_id)
         key = (consumption.get("task_id"), owner_id, consumption.get("plan_id"))
         if key in seen:
             issues.append(
@@ -314,9 +330,8 @@ def _validate_consumptions(
             )
         seen.add(key)
     for output in outputs:
-        output_id = output.get("output_id")
-        if str(output_id) not in consumed_output_ids:
-            issues.append(f"output has no consumption record: {output_id}")
+        if output.get("output_id") not in consumed_output_ids:
+            issues.append(f"output has no consumption record: {output.get('output_id')}")
 
 
 def _validate_outputs_and_consumptions(
@@ -326,18 +341,31 @@ def _validate_outputs_and_consumptions(
 ) -> None:
     raw_outputs = evidence.get("outputs")
     raw_consumptions = evidence.get("consumptions")
-    if raw_outputs is None and raw_consumptions is None:
-        return
-    outputs = _rows(raw_outputs, "outputs") if raw_outputs is not None else []
-    consumptions = _rows(raw_consumptions, "consumptions") if raw_consumptions is not None else []
     payload = evidence.get("output_payload")
-    if payload is not None:
-        payload = _object(payload, "output_payload")
+    if raw_outputs is None and raw_consumptions is None:
+        if payload is not None:
+            issues.append("output_payload provided without outputs; sha256 recompute skipped")
+        return
+    try:
+        outputs = _rows(raw_outputs, "outputs") if raw_outputs is not None else []
+        consumptions = (
+            _rows(raw_consumptions, "consumptions") if raw_consumptions is not None else []
+        )
+        if payload is not None:
+            payload = _object(payload, "output_payload")
+    except ValueError as exc:
+        # The extension fields are optional: a structurally malformed package
+        # degrades to a reported issue instead of a stack-trace exit.
+        issues.append(str(exc))
+        return
     plan_selected = plan.get("selected_intersections")
     selected = plan_selected if isinstance(plan_selected, list) else []
     for output in outputs:
         _validate_output_envelope(output, plan, payload, issues)
-        _validate_output_chains(output, selected, issues)
+        try:
+            _validate_output_chains(output, selected, issues)
+        except ValueError as exc:
+            issues.append(str(exc))
     _validate_consumptions(consumptions, outputs, plan, issues)
 
 

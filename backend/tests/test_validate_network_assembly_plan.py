@@ -372,6 +372,8 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
     non_intersection_row_id = evidence["child_result"]["target_lineage"]["disease_targets"][0][
         "lineage_row_id"
     ]
+    selection = evidence["plan"]["selected_intersections"][0]
+    compound_row_id = selection["selected_compound_lineage_row_ids"][0]
 
     def with_output(**changes: object) -> dict[str, object]:
         mutated = deepcopy(evidence)
@@ -386,6 +388,11 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
                 "chains": [{**evidence["outputs"][0]["chains"][0], **changes}],
             }
         ]
+        return mutated
+
+    def with_chains(chains: list[dict[str, object]]) -> dict[str, object]:
+        mutated = deepcopy(evidence)
+        mutated["outputs"] = [{**evidence["outputs"][0], "chains": chains}]
         return mutated
 
     def with_consumption(index: int, **changes: object) -> dict[str, object]:
@@ -470,6 +477,83 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
             "output has no consumption record",
             orphan_output,
         ),
+        # —— /review 整改（2026-09-28）：以下突变补齐既有校验规则的覆盖 ——
+        (
+            "output.assembly_input_ready must be true",
+            with_output(assembly_input_ready=False),
+        ),
+        (
+            "output.task_id does not match plan.task_id",
+            with_output(task_id="tampered-task"),
+        ),
+        (
+            "output.plan_id does not match plan.plan_id",
+            with_output(plan_id="assembly-plan-" + "0" * 64),
+        ),
+        (
+            "output.source_task_id does not match plan.source_task_id",
+            with_output(source_task_id="tampered-parent"),
+        ),
+        (
+            "output chain formula must be null",
+            with_chain(formula="消风散"),
+        ),
+        (
+            "output chain target_evidence_type must be predicted or mock",
+            with_chain(target_evidence_type="known_activity"),
+        ),
+        (
+            "output chain evidence grading",
+            with_chain(evidence_refs=["pmid:10777"]),
+        ),
+        (
+            "output chain target does not match the referenced selected intersection",
+            with_chain(target="WRONG_SYMBOL"),
+        ),
+        (
+            "output chain is missing selected disease lineage row references",
+            with_chain(
+                related_entity_ids=[
+                    selection["lineage_row_id"],
+                    *selection["selected_disease_lineage_row_ids"][1:],
+                    compound_row_id,
+                ]
+            ),
+        ),
+        (
+            "output chain is missing the selected compound lineage row reference",
+            with_chain(
+                related_entity_ids=[
+                    selection["lineage_row_id"],
+                    *selection["selected_disease_lineage_row_ids"],
+                ]
+            ),
+        ),
+        # 计数完备性（新增校验规则的突变，TDD 红阶段应失败在此项）
+        (
+            "output chain count",
+            with_chains(evidence["outputs"][0]["chains"][:-1]),
+        ),
+        (
+            "consumption.consumption_id must match assembly-consumption-<sha256>",
+            with_consumption(0, consumption_id="bogus-consumption-id"),
+        ),
+        (
+            "consumption.plan_sequence does not match plan.plan_sequence",
+            with_consumption(0, plan_sequence=evidence["consumptions"][0]["plan_sequence"] + 1),
+        ),
+        (
+            "consumption.owner_id must not be empty",
+            with_consumption(0, owner_id=""),
+        ),
+        (
+            "consumption.writer_id does not match the referenced output",
+            with_consumption(0, writer_id="other-writer"),
+        ),
+        (
+            "consumption.consumed_at does not match the referenced output",
+            with_consumption(0, consumed_at="2000-01-01T00:00:00Z"),
+        ),
     ]
 
     for expected_issue, mutated in mutations:
@@ -478,11 +562,41 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
         assert any(expected_issue in issue for issue in issues), (expected_issue, issues)
 
 
-def test_validator_ignores_output_fields_only_when_the_package_omits_them() -> None:
-    """Plan-only packages (existing shape) must stay valid."""
+def test_validator_still_accepts_plan_only_packages() -> None:
+    """The consumption-contract extension fields are optional."""
     client = TestClient(app)
     evidence = _build_evidence(client)
 
     assert "outputs" not in evidence
     ok, issues = validate(evidence)
     assert ok, issues
+
+
+def test_validator_reports_malformed_extension_fields_as_issues_not_crashes() -> None:
+    """Optional extension fields must degrade to issues, not stack-trace exits."""
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+
+    missing_chains = deepcopy(evidence)
+    missing_chains["outputs"] = [
+        {key: value for key, value in evidence["outputs"][0].items() if key != "chains"}
+    ]
+    non_list_outputs = deepcopy(evidence)
+    non_list_outputs["outputs"] = {"outputs": "not-a-list"}
+
+    for mutated in (missing_chains, non_list_outputs):
+        ok, issues = validate(mutated)
+        assert not ok
+        assert any("JSON array" in issue for issue in issues), issues
+
+
+def test_validator_flags_output_payload_without_outputs() -> None:
+    """A payload whose hash would never be recomputed must not pass silently."""
+    client = TestClient(app)
+    evidence = _build_evidence(client)
+
+    payload_only = {**evidence, "output_payload": WRITER_OUTPUT_PAYLOAD}
+
+    ok, issues = validate(payload_only)
+    assert not ok
+    assert any("output_payload provided without outputs" in issue for issue in issues), issues
