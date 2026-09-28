@@ -12,7 +12,6 @@ from app.core.config import get_settings
 from app.main import app
 from app.repositories.network_cache import NetworkCacheRepository, build_network_cache_key
 from app.repositories.runtime_storage import get_network_task_repository
-from app.services import network as network_service
 from app.services.network_connectors import UniProtConnector
 
 RESEARCH_PROTOCOL = {
@@ -231,7 +230,7 @@ def test_verify_disease_import_retries_task_id_collision_without_mutating_existi
         created_at="2026-07-15T00:00:00+00:00",
     )
     generated_ids = iter([SimpleNamespace(hex=collision_hex), SimpleNamespace(hex=unique_hex)])
-    monkeypatch.setattr(network_service, "uuid4", lambda: next(generated_ids))
+    monkeypatch.setattr("app.services.network.uuid4", lambda: next(generated_ids))
 
     response = client.post(
         "/api/network/disease-import/verify",

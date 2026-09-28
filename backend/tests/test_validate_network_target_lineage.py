@@ -14,11 +14,13 @@ from app.schemas.network import (
     NetworkDiseaseTargetVerifyMetadata,
     NetworkResearchProtocol,
 )
-from app.services.network import (
-    assess_network_research_readiness,
-    build_target_lineage,
+from app.services.network_imports import (
     build_verified_compound_import_snapshot,
     build_verified_disease_import_snapshot,
+)
+from app.services.network_lineage import (
+    assess_network_research_readiness,
+    build_target_lineage,
 )
 from scripts.validate_network_target_lineage import validate
 

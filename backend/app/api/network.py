@@ -25,25 +25,29 @@ from app.schemas.network import (
 )
 from app.schemas.network_entities import NetworkEntitiesResponse
 from app.schemas.omics import OmicsImportAccepted, OmicsTranscriptomicsManifestV1
-from app.services.network import (
+from app.services.network_adjudication import submit_network_target_adjudication
+from app.services.network_assembly import (
     build_network_assembly_plan_audit_view,
-    build_network_report_markdown,
     consume_network_assembly_plan,
-    create_network_analysis_task,
-    create_verified_compound_network_analysis_task,
-    create_verified_network_analysis_task,
-    get_network_analysis_result,
-    get_network_analysis_task,
-    list_all_entities,
-    list_network_analysis_tasks,
     seal_network_assembly_plan,
-    submit_network_target_adjudication,
 )
+from app.services.network_lineage import build_network_report_markdown
 from app.services.network_omics import (
     OmicsSnapshotConflictError,
     OmicsVerificationBlockedError,
     compute_omics_deg_projection,
     import_verified_omics_artifact,
+)
+from app.services.network_queries import (
+    get_network_analysis_result,
+    get_network_analysis_task,
+    list_all_entities,
+    list_network_analysis_tasks,
+)
+from app.services.network_tasks import (
+    create_network_analysis_task,
+    create_verified_compound_network_analysis_task,
+    create_verified_network_analysis_task,
 )
 
 router = APIRouter(prefix="/api/network", tags=["network"])

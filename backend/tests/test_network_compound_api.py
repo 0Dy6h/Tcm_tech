@@ -14,8 +14,7 @@ from app.repositories.runtime_storage import (
     get_network_task_repository,
 )
 from app.schemas.network import NetworkCompoundTargetVerifyMetadata
-from app.services import network as network_service
-from app.services.network import create_verified_compound_network_analysis_task
+from app.services.network_tasks import create_verified_compound_network_analysis_task
 
 OPEN_TARGETS_FIXTURE = (
     Path(__file__).parent / "data" / "open_targets_graphql_associations_25_06.json"
@@ -216,7 +215,7 @@ def test_verify_compound_import_retries_task_id_collision_without_mutating_exist
         created_at="2026-07-15T00:00:00+00:00",
     )
     generated_ids = iter([SimpleNamespace(hex=collision_hex), SimpleNamespace(hex=unique_hex)])
-    monkeypatch.setattr(network_service, "uuid4", lambda: next(generated_ids))
+    monkeypatch.setattr("app.services.network.uuid4", lambda: next(generated_ids))
 
     response = client.post(
         "/api/network/compound-import/verify",

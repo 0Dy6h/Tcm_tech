@@ -14,7 +14,7 @@ from app.schemas.network import (
     NetworkPipelineStep,
     NetworkResearchProtocol,
 )
-from app.services.network import build_network_report_markdown, build_target_lineage
+from app.services.network_lineage import build_network_report_markdown, build_target_lineage
 
 DISCLAIMER = "非诊断结论、需结合临床。"
 

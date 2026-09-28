@@ -20,16 +20,22 @@ from app.schemas.network import (
     NetworkResearchProtocol,
     NetworkTaskRecord,
 )
-from app.services import network as network_service
-from app.services.network import (
-    _build_chains_from_seed,
-    assess_network_research_readiness,
-    build_target_lineage,
+from app.services.network_imports import (
     build_verified_compound_import_snapshot,
     build_verified_disease_import_snapshot,
-    create_network_analysis_task,
+)
+from app.services.network_lineage import (
+    assess_network_research_readiness,
+    build_target_lineage,
+)
+from app.services.network_queries import (
     get_network_analysis_result,
     get_network_analysis_task,
+)
+from app.services.network_tasks import (
+    _advance_record,
+    _build_chains_from_seed,
+    create_network_analysis_task,
 )
 
 OPEN_TARGETS_FIXTURE = (
@@ -341,9 +347,9 @@ def test_imported_compound_snapshot_skips_provider_graph_and_enrichment(
     def _provider_must_not_run(_: object) -> object:
         pytest.fail("imported compound snapshot must not invoke a provider-derived graph")
 
-    monkeypatch.setattr(network_service, "select_network_provider", _provider_must_not_run)
+    monkeypatch.setattr("app.services.network.select_network_provider", _provider_must_not_run)
 
-    completed = network_service._advance_record(record)
+    completed = _advance_record(record)
 
     assert completed.status == "completed"
     assert completed.result is not None
@@ -436,7 +442,7 @@ def test_completed_legacy_compound_child_without_parent_link_is_read_only_failed
         result=legacy_result,
         created_at="2026-07-15T00:00:00+00:00",
     )
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
 
     try:
         before = repo.get(task_id)
@@ -477,8 +483,8 @@ def test_create_network_task_retries_task_id_collision_without_mutating_existing
         created_at="2026-07-15T00:00:00+00:00",
     )
     generated_ids = iter([SimpleNamespace(hex=collision_hex), SimpleNamespace(hex=unique_hex)])
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
-    monkeypatch.setattr(network_service, "uuid4", lambda: next(generated_ids))
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network.uuid4", lambda: next(generated_ids))
 
     try:
         accepted = create_network_analysis_task(
@@ -624,7 +630,7 @@ def test_created_network_task_persists_the_research_protocol(
     seed_path = tmp_path / "network_tasks_state.json"
     seed_path.write_text("[]\n", encoding="utf-8")
     repo = SqliteNetworkTaskRepository(tmp_path / "network.sqlite3", seed_path=seed_path)
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
     research_protocol = {
         "disease": "atopic_dermatitis",
         "phenotype": "特应性皮炎伴 2 型炎症与皮肤屏障异常",
@@ -634,7 +640,7 @@ def test_created_network_task_persists_the_research_protocol(
     }
 
     try:
-        accepted = network_service.create_network_analysis_task(
+        accepted = create_network_analysis_task(
             "消风散",
             "formula",
             reviewer_id="reviewer-a",
@@ -654,11 +660,11 @@ def test_create_task_rejects_disease_import_that_does_not_match_protocol(
     seed_path = tmp_path / "network_tasks_state.json"
     seed_path.write_text("[]\n", encoding="utf-8")
     repo = SqliteNetworkTaskRepository(tmp_path / "network.sqlite3", seed_path=seed_path)
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
 
     try:
         with pytest.raises(ValueError, match="must match research_protocol"):
-            network_service.create_network_analysis_task(
+            create_network_analysis_task(
                 "消风散",
                 "formula",
                 reviewer_id="reviewer-a",
@@ -707,7 +713,7 @@ def test_sqlite_task_with_disease_import_completes_and_round_trips_result(
     seed_path = tmp_path / "network_tasks_state.json"
     seed_path.write_text("[]\n", encoding="utf-8")
     repo = SqliteNetworkTaskRepository(tmp_path / "network.sqlite3", seed_path=seed_path)
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
     protocol = {
         "disease": "atopic_dermatitis",
         "phenotype": "特应性皮炎伴 2 型炎症",
@@ -743,7 +749,7 @@ def test_sqlite_task_with_disease_import_completes_and_round_trips_result(
     }
 
     try:
-        accepted = network_service.create_network_analysis_task(
+        accepted = create_network_analysis_task(
             "消风散",
             "formula",
             reviewer_id="reviewer-a",
@@ -751,12 +757,8 @@ def test_sqlite_task_with_disease_import_completes_and_round_trips_result(
             disease_target_import=imported,
         )
 
-        first_state, first = network_service.get_network_analysis_result(
-            accepted.task_id, "reviewer-a"
-        )
-        second_state, second = network_service.get_network_analysis_result(
-            accepted.task_id, "reviewer-a"
-        )
+        first_state, first = get_network_analysis_result(accepted.task_id, "reviewer-a")
+        second_state, second = get_network_analysis_result(accepted.task_id, "reviewer-a")
 
         assert first_state == second_state == "ok"
         assert first is not None and first.status == "running"
@@ -986,15 +988,11 @@ def test_concurrent_sqlite_polls_advance_without_losing_state(
             return repo.upsert(**kwargs)
 
     synchronized_repo = SynchronizedReadRepository()
-    monkeypatch.setattr(network_service, "_get_repository", lambda: synchronized_repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: synchronized_repo)
 
     try:
         with ThreadPoolExecutor(max_workers=2) as executor:
-            responses = list(
-                executor.map(
-                    lambda _: network_service.get_network_analysis_result(task_id), range(2)
-                )
-            )
+            responses = list(executor.map(lambda _: get_network_analysis_result(task_id), range(2)))
 
         assert {response.status for _, response in responses if response is not None} == {
             "running",
@@ -1030,16 +1028,12 @@ def test_failed_network_task_is_terminal_and_read_only(
         error="provider unavailable",
         created_at="2025-01-01T00:00:00",
     )
-    monkeypatch.setattr(network_service, "_get_repository", lambda: repo)
+    monkeypatch.setattr("app.services.network._get_repository", lambda: repo)
 
     try:
         before = repo.get(task_id)
-        first_state, first_response = network_service.get_network_analysis_result(
-            task_id, "reviewer-a"
-        )
-        second_state, second_response = network_service.get_network_analysis_result(
-            task_id, "reviewer-a"
-        )
+        first_state, first_response = get_network_analysis_result(task_id, "reviewer-a")
+        second_state, second_response = get_network_analysis_result(task_id, "reviewer-a")
         after = repo.get(task_id)
 
         assert before is not None

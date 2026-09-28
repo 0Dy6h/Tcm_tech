@@ -7,7 +7,7 @@ reliability.
 """
 
 from app.schemas.network import NetworkChain
-from app.services.network import (
+from app.services.network_lineage import (
     build_network_report_markdown,
     derive_chain_evidence_level,
     grade_chains_evidence,
@@ -89,10 +89,8 @@ def test_report_includes_evidence_grading_section_for_mock():
 
 def test_mock_analysis_flow_grades_all_chains_mock_inferred():
     """End-to-end: the real analyze flow grades chains before returning them."""
-    from app.services.network import (
-        create_network_analysis_task,
-        get_network_analysis_result,
-    )
+    from app.services.network_queries import get_network_analysis_result
+    from app.services.network_tasks import create_network_analysis_task
 
     accepted = create_network_analysis_task("消风散", "formula")
     get_network_analysis_result(accepted.task_id)  # first poll → running

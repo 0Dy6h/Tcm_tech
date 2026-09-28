@@ -1,6 +1,7 @@
 """Integration tests for network enrichment analysis."""
 
-from app.services.network import create_network_analysis_task, get_network_analysis_result
+from app.services.network_queries import get_network_analysis_result
+from app.services.network_tasks import create_network_analysis_task
 
 
 def test_network_analysis_includes_enrichment_when_enough_targets():
