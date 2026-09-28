@@ -755,7 +755,9 @@ from app.services.network_lineage import (  # noqa: E402
     build_network_report_markdown,
     derive_chain_evidence_level,
 )
-from app.services.network_queries import _with_omics_evidence_overlay  # noqa: E402
+from app.services.network_queries import (  # noqa: E402
+    _with_omics_evidence_overlay,
+)
 
 
 def test_derive_chain_evidence_level_never_yields_omics_validated() -> None:

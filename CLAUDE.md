@@ -38,7 +38,7 @@ Query the actual symbols under these files instead of relying on a static symbol
 
 - Backend RAG/export: `backend/app/services/rag.py`, `rag_export_integrity.py`, `rag_docx.py`
 - Backend PDF: `backend/app/api/upload.py`, `backend/app/services/upload.py`, `backend/app/services/pdf_storage.py`, literature/chunk repositories
-- Backend network: `backend/app/api/network.py`, `backend/app/services/network.py`, `*network_tasks.py`
+- Backend network: `backend/app/api/network.py`, the sibling modules `backend/app/services/network_*.py` (the public import surface; `network.py` itself is only a private late-binding monkeypatch hub)
 - Frontend clients: `frontend/lib/api/client.ts`, `literature.ts`, `rag.ts`, `network.ts`
 - Frontend pages: `frontend/app/literature/`, `frontend/app/rag/`, `frontend/app/network/`
 

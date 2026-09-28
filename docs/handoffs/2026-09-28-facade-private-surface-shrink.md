@@ -31,7 +31,27 @@
 1. **真实科研数据闭环**（产品主轴缺口）：装配 writer 已具备消费原语与装配计算，尚无真实数据端到端（Open Targets 真实 artifact + trusted manifest + 真实判定记录）；需 operator 参与拍板数据源与 manifest。
 2. 检索质量下一轮迭代 / 前端 UX 新一轮循环（按既往节奏）。
 
-## 基线
+## /review 整改（同日，紧随 6532ca8）
 
-- `main` 工作树：本切片单笔提交；远端同步后干净。
-- 后端 994+1skipped / 前端 309+typecheck+build 为新基线。
+/review 对 6532ca8 给出 0🔴/1🟠/1🟡/2⚪，本轮全部闭环（TDD + 物理变异验证）：
+
+- **🟠 相对导入盲区**：`_facade_import_offenders` 与 sibling 扫描此前只匹配 `node.module` 绝对形态，`from ..services.network import x`（level=2）/`from .network import x`/`from . import network` 三形态全部漏检（AST 模拟实证）。修复：新增 `_is_relative_facade_import` 尾段匹配（AST 无包上下文，按 last-segment 判定；`network_common` 等合法兄弟不会落在裸 `network` 段，负控制锁定零误报），两个扫描器同步接入；新增强制形态矩阵单元测试 `test_facade_import_scanner_catches_every_import_shape`（8 捕获形态 + 4 负控制），红→绿。
+- **🟡 扫描面**：测试层扫描 `glob("test_*.py")` → `rglob("*.py")`（嵌套目录不再逃逸），`conftest.py` 纳入扫描（字符串 patch 非 import,天然合法不误报）。
+- **⚪**：`test_network_omics.py` 中段导入统一括号块风格；`CLAUDE.md` 项目入口行同步「sibling 即公共导入面、network.py 仅为私有 patch hub」。
+
+### 变异验证记录（cp 备份还原，非 git checkout）
+
+| 组 | 注入 | 红形态与原因 |
+|---|---|---|
+| M1 | api 文件尾追加绝对 façade 导入 | 扫描红，精确行号 `app/api/network.py:528` |
+| M2 | api 首行相对导入 `from ..services.network import ...` | 扫描红 `:1 relative import of the network façade`（整改前此形态漏检——单元测试红阶段实证） |
+| M3 | `tests/nested/test_probe_facade.py` 嵌套 façade 导入 | rglob 扫描红（旧 `glob("test_*.py")` 会漏） |
+| M4a | conftest 导入 façade **已移除**的名字 | **崩溃形态**：conftest 收集期 ImportError——fail loud,但不计扫描器验证 |
+| M4b | conftest 导入 façade 仍导出的 `uuid4` | 扫描红 `tests/conftest.py:113`（崩溃形态不可替代扫描验证,故重做） |
+| M5 | façade `__all__` 混入 `grade_chains_evidence` | 断言红（sorted 集合差） |
+
+## 基线（整改后）
+
+- 后端门禁四项全绿：ruff format/check、mypy strict（79 文件）、**pytest 995 通过 + 1 skipped**（994 + 1 scanner 形态矩阵断言）。
+- 前端零 diff 认证：test 309/0 + typecheck + build 全绿。
+- smoke 免跑：本轮零 `app/` 运行时 diff（仅 guard 测试、omics 测试风格、两份文档），循 9-28 test-only 提交先例；运行时代码与 6532ca8 smoke 验证态逐字节一致。

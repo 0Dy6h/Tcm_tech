@@ -6,7 +6,7 @@ cross-sibling names through a function-body façade import at call time; a
 module-level façade import would bind the original objects and silently
 defeat every one of those patches while the suite stays green.
 
-Enforced six ways:
+Enforced seven ways:
 
 1. No sibling imports the façade at module level (import cycle + bypass).
 2. No sibling calls a patchable name bare instead of ``_facade.<name>``.
@@ -16,6 +16,9 @@ Enforced six ways:
 5. No test other than this guard imports the façade; tests patch via the
    string form ``monkeypatch.setattr("app.services.network.<name>", ...)``.
 6. The façade ``__all__`` is exactly the monkeypatch surface.
+7. The shared import scanner provably catches every façade-import shape
+   (absolute, relative, function-body) and stays silent for legal
+   network_common / non-façade sibling imports.
 """
 
 import ast
@@ -36,11 +39,30 @@ def _sibling_sources() -> dict[str, str]:
     }
 
 
+def _is_relative_facade_import(node: ast.ImportFrom) -> bool:
+    """Match relative façade imports without package context.
+
+    ``ImportFrom.module`` drops the leading dots, so ``from ..services.network
+    import x`` reads as ``services.network`` and ``from .network import x``
+    reads as ``network``.  Match by last segment: exact ``network`` (the
+    façade), or a ``services`` tail importing the name ``network``.  Legit
+    siblings like ``network_common`` never end in a bare ``network`` segment.
+    """
+    names = [alias.name for alias in node.names]
+    if node.module is None:
+        return "network" in names
+    last = node.module.split(".")[-1]
+    return last == "network" or (last == "services" and "network" in names)
+
+
 def _facade_import_offenders(source: str) -> list[str]:
     offenders: list[str] = []
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom):
-            if node.module == "app.services" and any(
+            if node.level > 0:
+                if _is_relative_facade_import(node):
+                    offenders.append(f"{node.lineno}: relative import of the network façade")
+            elif node.module == "app.services" and any(
                 alias.name == "network" for alias in node.names
             ):
                 offenders.append(f"{node.lineno}: from app.services import network")
@@ -58,11 +80,15 @@ def test_no_sibling_imports_facade_at_module_level() -> None:
     for name, source in _sibling_sources().items():
         for node in ast.parse(source).body:
             if isinstance(node, ast.ImportFrom):
-                if node.module == "app.services" and any(
-                    alias.name == "network" for alias in node.names
+                if node.level > 0 and _is_relative_facade_import(node):
+                    offenders.append(f"{name}:{node.lineno} relative import of the network façade")
+                elif (
+                    node.level == 0
+                    and node.module == "app.services"
+                    and any(alias.name == "network" for alias in node.names)
                 ):
                     offenders.append(f"{name}:{node.lineno} from app.services import network")
-                elif node.module == "app.services.network":
+                elif node.level == 0 and node.module == "app.services.network":
                     offenders.append(f"{name}:{node.lineno} from app.services.network import ...")
             elif isinstance(node, ast.Import):
                 for alias in node.names:
@@ -178,11 +204,13 @@ def test_api_layer_does_not_import_facade() -> None:
 
 def test_only_the_guard_test_imports_facade() -> None:
     offenders: list[str] = []
-    for path in sorted(Path(__file__).parent.glob("test_*.py")):
-        if path.name == Path(__file__).name:
+    tests_dir = Path(__file__).parent
+    guard_name = Path(__file__).name
+    for path in sorted(tests_dir.rglob("*.py")):
+        if path.name == guard_name:
             continue
         for offender in _facade_import_offenders(path.read_text(encoding="utf-8")):
-            offenders.append(f"tests/{path.name}:{offender}")
+            offenders.append(f"tests/{path.relative_to(tests_dir)}:{offender}")
     assert offenders == [], (
         "only this guard may import the façade; patch via string form "
         'monkeypatch.setattr("app.services.network.<name>", ...) and import '
@@ -192,3 +220,31 @@ def test_only_the_guard_test_imports_facade() -> None:
 
 def test_facade_all_is_exactly_the_patch_surface() -> None:
     assert sorted(network_service.__all__) == sorted(PATCHABLE_NAMES)
+
+
+def test_facade_import_scanner_catches_every_import_shape() -> None:
+    caught = [
+        # absolute shapes
+        "from app.services.network import seal_network_assembly_plan\n",
+        "from app.services import network\n",
+        "import app.services.network\n",
+        # function-body placement must not escape the walk
+        "def f():\n    from app.services.network import seal_network_assembly_plan\n",
+        # relative shapes (no package context in the AST)
+        "from ..services.network import seal_network_assembly_plan\n",
+        "from .network import seal_network_assembly_plan\n",
+        "from . import network\n",
+        "from ..services import network\n",
+    ]
+    not_caught = [
+        # network_common stays a legal module-level sibling import
+        "from .network_common import _canonical_sha256\n",
+        "from . import network_common\n",
+        "from app.services.network_common import _canonical_sha256\n",
+        # the guard's own sibling imports are not the façade
+        "from app.services import network_providers, network_tasks\n",
+    ]
+    for source in caught:
+        assert _facade_import_offenders(source) != [], f"scanner missed: {source!r}"
+    for source in not_caught:
+        assert _facade_import_offenders(source) == [], f"scanner false-positived: {source!r}"
