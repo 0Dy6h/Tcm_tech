@@ -21,7 +21,22 @@ from app.repositories.runtime_storage import (
     clear_network_task_repository_cache,
     get_network_task_repository,
 )
-from scripts.validate_network_assembly_plan import validate
+from scripts.validate_network_assembly_plan import (
+    _CONSUMPTION_OUTPUT_FIELDS,
+    _CONSUMPTION_PLAN_FIELDS,
+    validate,
+)
+
+
+def _tamper_value(value: object) -> object:
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, str):
+        return f"tampered-{value}"
+    return None
+
 
 OPEN_TARGETS_FIXTURE = (
     Path(__file__).parent / "data" / "open_targets_graphql_associations_25_06.json"
@@ -470,10 +485,6 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
             with_consumption(0, output_id="assembly-output-" + "2" * 64),
         ),
         (
-            "consumption.output_sha256 does not match the referenced output",
-            with_consumption(0, output_sha256="0" * 64),
-        ),
-        (
             "output has no consumption record",
             orphan_output,
         ),
@@ -539,22 +550,32 @@ def test_validator_rejects_every_tampered_output_binding() -> None:
             with_consumption(0, consumption_id="bogus-consumption-id"),
         ),
         (
-            "consumption.plan_sequence does not match plan.plan_sequence",
-            with_consumption(0, plan_sequence=evidence["consumptions"][0]["plan_sequence"] + 1),
-        ),
-        (
             "consumption.owner_id must not be empty",
             with_consumption(0, owner_id=""),
         ),
-        (
-            "consumption.writer_id does not match the referenced output",
-            with_consumption(0, writer_id="other-writer"),
-        ),
-        (
-            "consumption.consumed_at does not match the referenced output",
-            with_consumption(0, consumed_at="2000-01-01T00:00:00Z"),
-        ),
     ]
+
+    # Per-field binding mutations are derived from the validator's own field
+    # tuples: scripts/ sits outside every ruff/mypy gate, so a typo'd field
+    # string is invisible to static checks — each field must prove it fires.
+    for field in _CONSUMPTION_PLAN_FIELDS:
+        mutations.append(
+            (
+                f"consumption.{field} does not match plan.{field}",
+                with_consumption(
+                    0, **{field: _tamper_value(evidence["consumptions"][0].get(field))}
+                ),
+            )
+        )
+    for field in _CONSUMPTION_OUTPUT_FIELDS:
+        mutations.append(
+            (
+                f"consumption.{field} does not match the referenced output",
+                with_consumption(
+                    0, **{field: _tamper_value(evidence["consumptions"][0].get(field))}
+                ),
+            )
+        )
 
     for expected_issue, mutated in mutations:
         ok, issues = validate(mutated)
@@ -600,3 +621,34 @@ def test_validator_flags_output_payload_without_outputs() -> None:
     ok, issues = validate(payload_only)
     assert not ok
     assert any("output_payload provided without outputs" in issue for issue in issues), issues
+
+
+def test_validator_flags_payload_against_explicitly_empty_output_stores() -> None:
+    """outputs: [] is the same orphan-payload situation as omitting the key."""
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+
+    mutated = deepcopy(evidence)
+    mutated["outputs"] = []
+    mutated["consumptions"] = []
+
+    ok, issues = validate(mutated)
+    assert not ok
+    assert any("output_payload provided without outputs" in issue for issue in issues), issues
+
+
+def test_validator_continues_output_checks_when_payload_is_malformed() -> None:
+    """A non-object payload must not suppress the output/consumption validation."""
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+
+    mutated = deepcopy(evidence)
+    mutated["output_payload"] = ["not", "an", "object"]
+    mutated["outputs"] = [{**evidence["outputs"][0], "output_id": "assembly-output-" + "0" * 64}]
+
+    ok, issues = validate(mutated)
+    assert not ok
+    assert any("output_payload must be a JSON object" in issue for issue in issues), issues
+    # The deliberately broken output_id must still be caught: payload failure
+    # degrades to payload=None, it never aborts the remaining checks.
+    assert any("output.output_id does not derive" in issue for issue in issues), issues

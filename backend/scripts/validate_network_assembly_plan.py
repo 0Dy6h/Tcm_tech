@@ -53,6 +53,20 @@ _ROW_ID_PATTERN = re.compile(r"^(disease|compound|intersection)-[0-9a-f]{64}$")
 _CONSUMPTION_ID_PATTERN = re.compile(r"^assembly-consumption-[0-9a-f]{64}$")
 _TERMINAL_DECISIONS = {"included", "excluded"}
 _DISCLAIMER = "非诊断结论、需结合临床。"
+# scripts/ sits outside every ruff/mypy gate, so these field tuples are also
+# imported by the test suite to derive per-field tampering mutations: a typo
+# here would silently kill exactly one binding check with no static net.
+_CONSUMPTION_PLAN_FIELDS = ("task_id", "plan_id", "plan_sequence", "canonical_plan_input_sha256")
+_CONSUMPTION_OUTPUT_FIELDS = (
+    "task_id",
+    "plan_id",
+    "plan_sequence",
+    "canonical_plan_input_sha256",
+    "output_sha256",
+    "writer_id",
+    "consumed_at",
+)
+_ORPHAN_PAYLOAD_ISSUE = "output_payload provided without outputs; sha256 recompute skipped"
 
 
 def _canonical_sha256(payload: Any) -> str:
@@ -219,7 +233,10 @@ def _validate_output_chains(
     # cover chains that exist; this count closes the "silently missing chain"
     # producer-regression class.
     expected_count = sum(
-        len(item.get("selected_compound_lineage_row_ids") or []) for item in selections.values()
+        len(item["selected_compound_lineage_row_ids"])
+        if isinstance(item.get("selected_compound_lineage_row_ids"), list)
+        else 0
+        for item in selections.values()
     )
     chains = _rows(output.get("chains"), "output.chains")
     if len(chains) != expected_count:
@@ -287,7 +304,7 @@ def _validate_consumptions(
     issues: list[str],
 ) -> None:
     outputs_by_id = {item.get("output_id"): item for item in outputs if isinstance(item, dict)}
-    seen: set[tuple[Any, Any, Any]] = set()
+    seen: set[tuple[object, object, object]] = set()
     consumed_output_ids: set[str] = set()
     for index, consumption in enumerate(consumptions):
         record = f"record {index}"
@@ -298,7 +315,7 @@ def _validate_consumptions(
             issues.append(
                 f"consumption.consumption_id must match assembly-consumption-<sha256> ({record})"
             )
-        for field in ("task_id", "plan_id", "plan_sequence", "canonical_plan_input_sha256"):
+        for field in _CONSUMPTION_PLAN_FIELDS:
             if consumption.get(field) != plan.get(field):
                 issues.append(f"consumption.{field} does not match plan.{field} ({record})")
         owner_id = consumption.get("owner_id")
@@ -309,15 +326,7 @@ def _validate_consumptions(
         if output is None:
             issues.append(f"consumption.output_id does not reference a sealed output ({record})")
         else:
-            for field in (
-                "task_id",
-                "plan_id",
-                "plan_sequence",
-                "canonical_plan_input_sha256",
-                "output_sha256",
-                "writer_id",
-                "consumed_at",
-            ):
+            for field in _CONSUMPTION_OUTPUT_FIELDS:
                 if consumption.get(field) != output.get(field):
                     issues.append(
                         f"consumption.{field} does not match the referenced output ({record})"
@@ -341,23 +350,33 @@ def _validate_outputs_and_consumptions(
 ) -> None:
     raw_outputs = evidence.get("outputs")
     raw_consumptions = evidence.get("consumptions")
-    payload = evidence.get("output_payload")
     if raw_outputs is None and raw_consumptions is None:
+        payload = evidence.get("output_payload")
         if payload is not None:
-            issues.append("output_payload provided without outputs; sha256 recompute skipped")
+            issues.append(_ORPHAN_PAYLOAD_ISSUE)
         return
     try:
         outputs = _rows(raw_outputs, "outputs") if raw_outputs is not None else []
         consumptions = (
             _rows(raw_consumptions, "consumptions") if raw_consumptions is not None else []
         )
-        if payload is not None:
-            payload = _object(payload, "output_payload")
     except ValueError as exc:
         # The extension fields are optional: a structurally malformed package
         # degrades to a reported issue instead of a stack-trace exit.
         issues.append(str(exc))
         return
+    payload = evidence.get("output_payload")
+    if payload is not None:
+        try:
+            payload = _object(payload, "output_payload")
+        except ValueError as exc:
+            # A malformed payload only kills the sha256 recompute, never the
+            # remaining output/consumption checks (they run with payload=None).
+            issues.append(str(exc))
+            payload = None
+    if payload is not None and not outputs and not consumptions:
+        issues.append(_ORPHAN_PAYLOAD_ISSUE)
+        payload = None
     plan_selected = plan.get("selected_intersections")
     selected = plan_selected if isinstance(plan_selected, list) else []
     for output in outputs:

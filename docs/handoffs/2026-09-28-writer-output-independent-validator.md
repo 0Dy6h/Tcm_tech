@@ -46,3 +46,17 @@
 - 后端门禁四项全绿：ruff format/check、mypy strict（79 文件）、**pytest 1000 通过 + 1 skipped**（998 + 2 新测试；矩阵 15→31 突变在既有测试函数内）。
 - 前端零改动认证：test 309/0 + typecheck + build 全绿（零前端 diff）。
 - smoke 免跑：仍零 `app/` 运行时 diff（validator 离线脚本 + 测试 + 文档）。
+
+## 二轮 /review 整改（同日，紧随 291eb1c）
+
+/review 对 291eb1c 给出 0🔴/0🟠/2🟡/4⚪，本轮全部闭环：
+
+- **🟡1 payload 解析失败中止全部校验**：payload 非 dict 时原实现 except→return 连带跳过同包 outputs/consumptions 校验（fail-closed 但诊断截断）。拆分解析路径：payload 失败 → 记 issue + `payload=None` 继续其余校验（新测试证明：payload 畸形 + output_id 篡改双 issue 齐发）；仅 outputs/consumptions 解析失败才整体返回。
+- **🟡2 消费绑定字段 typo 盲区**：`scripts/` 在 ruff/mypy 门禁范围之外，循环里的裸字符串字段名 typo 静默杀死单条检查。字段表提为 validator 模块常量 `_CONSUMPTION_PLAN_FIELDS`/`_CONSUMPTION_OUTPUT_FIELDS`，测试 import 常量逐字段派生突变（31→38，替换 4 个字面代表突变）——新增绑定字段走常量即自动获得覆盖，AGENTS.md 已成文该约束。
+- **⚪**：计数检查对非 list 真值加 isinstance 守卫（不再产出字符数 nonsense）；空 `outputs: []` + payload 与键缺省统一为同一孤儿 issue（`_ORPHAN_PAYLOAD_ISSUE` 常量去重）；`seen` 注解收窄 `tuple[object, object, object]`；AGENTS.md/current-state/plan doc 同步链数量完备性与粒度表述（「全规则覆盖」修正为循环粒度→本轮后逐字段）。
+
+### 二轮整改后基线
+
+- 后端门禁四项全绿：ruff format/check、mypy strict（79 文件）、**pytest 1002 通过 + 1 skipped**（1000 + 2 新测试：payload 畸形仍继续校验、空 outputs 孤儿 payload；矩阵 38 突变在既有测试函数内）。
+- 前端零改动认证：test 309/0 + typecheck + build 全绿（零前端 diff）。
+- smoke 免跑：仍零 `app/` 运行时 diff。

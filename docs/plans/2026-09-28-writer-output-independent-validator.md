@@ -47,7 +47,7 @@
 ## 4. 测试与验收
 
 - TDD：先在 `tests/test_validate_network_assembly_plan.py` 新增消费流测试（真实 API 流：seal → consume → 组包），确认对扩展字段 validator 暂不校验时变红，再实现转绿。
-- 变异矩阵：每条校验规则至少一个 evidence 级篡改变体，断言拒绝且 issue 文本命中预期子串（核对红原因，不接受「反正红了」）。32cf2ae 首版仅 15 突变覆盖 11/22 规则，/review 整改后补齐至 31 突变全规则覆盖（含链数量删链突变）。
+- 变异矩阵：每条校验规则至少一个 evidence 级篡改变体，断言拒绝且 issue 文本命中预期子串（核对红原因，不接受「反正红了」）。32cf2ae 首版仅 15 突变覆盖 11/22 规则；一轮整改补齐规则粒度（31 突变）；二轮整改把消费绑定字段表提为 validator 模块常量（`_CONSUMPTION_PLAN_FIELDS`/`_CONSUMPTION_OUTPUT_FIELDS`），测试按常量逐字段派生突变（38 突变）——`scripts/` 在 ruff/mypy 门禁范围之外，字段名 typo 只有这条常量派生防线能拦，新增绑定字段必须走常量。
 - 畸形扩展包降级为 issue 而非崩溃；孤儿 `output_payload` 显式报 issue。
 - 向后兼容：既有 plan-only 测试零改动通过。
 
