@@ -39,6 +39,8 @@
 
 后端 venv 是 `backend/.uv-test-venv`（不是 `.venv`），必须走 `Scripts\python.exe`。
 
+`scripts/*.ps1` 是 UTF-8 无 BOM 且含中文注释，必须用 pwsh（7.x）执行；Windows PowerShell 5.1（`powershell.exe`）按 GBK 误读注释会在解析期直接报错（2026-09-28 实证 `run-internal-preview.ps1` line 26，见 `docs/handoffs/2026-09-28-facade-private-surface-shrink.md`）——解析失败与 diff 无关，先查执行宿主再查代码。
+
 **端口事实（2026-09-16）**：本机 8000 保留给另一项目，全程不可触碰。本项目本地 `pnpm dev:backend`、前端 API fallback、preview 与 E2E 默认后端均为 8010，前端默认 3000。`run-internal-preview.ps1` / `verify-local.ps1` / `smoke-internal-preview.ps1` 继续显式拒绝本机 8000。前端所有 fetcher 共用 `frontend/lib/api/client.ts` 的 base URL 解析；server rendering 优先非公开 `QIYAN_INTERNAL_API_BASE_URL`，浏览器使用 `NEXT_PUBLIC_API_BASE_URL` 或 8010 fallback。CORS 仍仅允许本机回环 3000 / 3100；云端 runbook 与容器的内部 8000 属于独立部署语境。
 
 ```powershell
