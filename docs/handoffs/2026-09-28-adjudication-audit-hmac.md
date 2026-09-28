@@ -33,8 +33,24 @@
 - smoke：isolated preview（`.tmp/trial-audit`，8010/3000）`Internal preview smoke passed.`，收尾 `-Stop` 后双端口确认释放。
 - 变异式红证据：红阶段两文件收集期 `ModuleNotFoundError: app.core.audit_hmac`（与 D9 常量先例同形）；file C 兼容测试在 exclude 修正前行为红。
 
+## /review 整改（同日，紧随 dc2d01d）
+
+/review 对 dc2d01d 给出 0🔴/1🟠/2🟡/4⚪，本轮全部闭环（脚本+测试+文档，零 app 运行时 diff）：
+
+- **🟠1 尾部截断 overclaim**：自洽链检不出删/剥**最后一个**已审计事件（尾部无后继 prev 可失配），而 plan §1/§2.3 与脚本 docstring 原声称「任何删/改/重排可检出」。三处文档勘误（plan §1/§2.3/§4/§5、脚本 docstring 新增 Detection boundary 段、AGENTS.md 子弹补边界句）+ 两个边界锁定测试（删尾 → ok 且 issues 空、剥尾 → ok 且 unaudited+1——把盲区钉成被测试证明的事实，防止后来者误改语义）+ 外锚立项（遗留 #4）。勘误注记：dc2d01d 提交信息「删已审计事件」矩阵口径实为「已审计区段**内部**事件」，提交信息不可改写，本节显式更正。
+- **🟡1 tag 三态分诊**：tag 存在但非 64 字符串（如 123 / 63 位）原走 `not isinstance(tag, str)` 分支被静默计入 `unaudited`（尾部位置 ok=True 放行）。改为三态：缺省/null → unaudited（合法 legacy）；存在但非 64 字符串 → violation（producer 不可能形态即篡改）；64 字符串 → compare_digest。两个突变测试 TDD 红→绿。
+- **🟡2 CJK 同规实证**：真实状态接受测试的覆盖事件 `reason` None→「人工复核」，`ensure_ascii=False` 两侧同规跨非 ASCII 字节从「构造上相同」变为「被测试证明」（防零共享副本静默漂移）。
+- **⚪**：输入内重复 `task_id` 判违规（json/sqlite 后端互斥，同 id 双现即状态异常）；CLI `--state-json` 指向缺失文件（key 已设）exit 2 路径补测；`protocols.py` 模块 docstring 补「亦承载跨 backend 共享助手」句；如实记录：smoke 的 `network_adjudication` 因 mock 任务无可判定行条件性跳过——live 走查未触达带 tag 的 append 路径，该路径由 TestClient 套件覆盖，勿把「smoke passed」读成审计路径在线上走过。
+
+### 整改后基线
+
+- 后端门禁四项全绿：ruff format/check、mypy strict（80 文件）、**pytest 1039 通过 + 1 skipped**（1033 + 6 新测试：3 行为突变红→绿 + 2 边界锁定 + 1 CLI 覆盖）。
+- 前端零改动认证：test 309/0 + typecheck + build 全绿。
+- smoke 免跑：本轮零 `app/` 运行时 diff（独立脚本 + 测试 + 文档 + protocols docstring）。
+
 ## 遗留与下一个切片候选
 
 1. **真实科研数据闭环**（产品主轴缺口，最高优先）：仍需 operator 拍板数据源与 trusted manifest，随后端到端走 verified 导入 → 判定 → seal → consume → 独立 validator 全链（本切片后可加验 audit 链）。
 2. 检索质量下一轮迭代 / 前端 UX 新一轮循环（按既往节奏，由研究者发起）。
 3. 小额技术债（非阻塞）：`scripts/` 三个既有文件 format 漂移；audit HMAC 密钥轮换/多 key 并验未设计（单 env 单 key，operator 事项）。
+4. **审计链外锚（尾部截断检测，🟠1 整改后立项）**：自洽链的检测盲区已被边界测试锁定；候选方案为 plan seal 时绑定全流事件元组（涉 D4 policy v2 语义，会改 plan_id 派生）或独立 append 计数器文件（新存储面），需研究者拍板后方可开工。

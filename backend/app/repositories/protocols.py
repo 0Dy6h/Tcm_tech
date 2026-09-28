@@ -1,7 +1,10 @@
 """Protocol definitions for repository interfaces.
 
 These protocols enable dependency inversion: services depend on the
-abstract interface, not the concrete InMemory/SQLite implementation.
+abstract interface, not the concrete InMemory/SQLite implementation.  The
+module also hosts repository-layer shared helpers (currently
+``_tag_with_audit_hmac``) whose behaviour must stay identical across
+backends.
 """
 
 from collections.abc import Callable

@@ -198,6 +198,68 @@ def test_rejects_everything_under_a_wrong_key() -> None:
     assert len(issues) == 2
 
 
+def test_rejects_a_non_string_tag() -> None:
+    """A present-but-non-string tag is producer-impossible corruption; it must
+    be a violation, never a silent ``unaudited`` downgrade."""
+
+    def mutate(stream: list[dict[str, Any]]) -> None:
+        stream[0]["adjudications"][1]["audit_hmac"] = 123
+
+    ok, issues, _ = validate_tasks(_mutated_stream(mutate), KEY.encode())
+
+    assert not ok
+    assert any("audit_hmac must be a 64-character string" in issue for issue in issues)
+
+
+def test_rejects_a_wrong_length_tag() -> None:
+    def mutate(stream: list[dict[str, Any]]) -> None:
+        stream[0]["adjudications"][2]["audit_hmac"] = "f" * 63
+
+    ok, issues, _ = validate_tasks(_mutated_stream(mutate), KEY.encode())
+
+    assert not ok
+    assert any("audit_hmac must be a 64-character string" in issue for issue in issues)
+
+
+def test_tail_deletion_is_outside_the_chain_detection_scope() -> None:
+    """Honest boundary (dc2d01d review 🟠1): a self-contained chain has no
+    successor whose ``prev`` link could mismatch, so deleting the LAST audited
+    event is invisible to it. This test locks that truth so nobody mistakes
+    exit 0 for ``nothing was truncated``; detecting tail truncation needs an
+    external anchor (plan-bound full-stream tuple or counter file), which is
+    a deferred decision in the handoff."""
+
+    def mutate(stream: list[dict[str, Any]]) -> None:
+        del stream[0]["adjudications"][2]
+
+    ok, issues, unaudited = validate_tasks(_mutated_stream(mutate), KEY.encode())
+
+    assert ok, issues
+    assert issues == []
+    assert unaudited == 0
+
+
+def test_tail_tag_strip_is_reported_as_unaudited_not_violation() -> None:
+    def mutate(stream: list[dict[str, Any]]) -> None:
+        stream[0]["adjudications"][2]["audit_hmac"] = None
+
+    ok, issues, unaudited = validate_tasks(_mutated_stream(mutate), KEY.encode())
+
+    assert ok, issues
+    assert issues == []
+    assert unaudited == 1
+
+
+def test_rejects_duplicate_task_ids_in_input() -> None:
+    stream = _tagged_stream(2)
+    stream.append(dict(stream[0]))
+
+    ok, issues, _ = validate_tasks(stream, KEY.encode())
+
+    assert not ok
+    assert any("duplicate task_id" in issue for issue in issues)
+
+
 def _seed_and_append(repo: NetworkTaskRepository | SqliteNetworkTaskRepository) -> None:
     repo.upsert(
         task_id=TASK_ID,
@@ -214,7 +276,10 @@ def _seed_and_append(repo: NetworkTaskRepository | SqliteNetworkTaskRepository) 
         adjudication_id="adjudication-" + "b" * 64,
         lineage_row_id=ROW_ID,
         decision="included",
-        reason=None,
+        # CJK on purpose: the acceptance recomputation must cross non-ASCII
+        # bytes so an ensure_ascii drift between the two zero-shared
+        # canonicalizations cannot hide behind a reason-less event.
+        reason="人工复核",
         decided_at="2026-09-28T10:00:00+00:00",
         reviewer_id="reviewer-a",
     )
@@ -288,3 +353,11 @@ def test_cli_fails_closed_without_key_or_input(
 
     monkeypatch.setenv(AUDIT_KEY_ENV, KEY)
     assert main([]) == 2
+
+
+def test_cli_reports_missing_state_file_as_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(AUDIT_KEY_ENV, KEY)
+
+    assert main(["--state-json", str(tmp_path / "missing.json")]) == 2

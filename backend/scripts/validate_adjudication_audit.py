@@ -20,9 +20,18 @@ Chain rule (``adjudication_audit_hmac_v1``)::
     }))
 
 An event without ``audit_hmac`` is reported as ``unaudited`` (legacy prefix
-or audit disabled at append time), never as a violation. A tag mismatch
-means the event content, its index (deletion/insertion before it), its
-neighbour link or the tag itself no longer matches the key.
+or audit disabled at append time), never as a violation. A tag that IS
+present but is not a 64-character string is producer-impossible corruption
+and is reported as a violation, not downgraded to ``unaudited``.
+
+Detection boundary (dc2d01d review): the chain verifies each audited event
+against its neighbour, so edits, interior deletions, reorderings and
+interior tag stripping inside the audited era are detected. **Tail
+truncation is not**: deleting (or stripping) the LAST audited event leaves
+no successor whose ``prev`` link could mismatch, and exit 0 therefore never
+means "nothing was truncated". Detecting tail truncation requires an
+external anchor (e.g. a plan-bound full-stream event tuple or a counter
+file) — a deferred decision, see the slice handoff.
 
 State inputs (operator-controlled, gitignored):
     --state-json PATH    network-task JSON state file (list of records)
@@ -81,12 +90,11 @@ def _derive_tag(
     ).hexdigest()
 
 
-def validate_tasks(
-    tasks: list[Any], key: bytes
-) -> tuple[bool, list[str], int]:
+def validate_tasks(tasks: list[Any], key: bytes) -> tuple[bool, list[str], int]:
     """Walk every task's adjudication stream; return (ok, issues, unaudited)."""
     issues: list[str] = []
     unaudited = 0
+    seen_task_ids: set[str] = set()
     for task_index, task in enumerate(tasks):
         if not isinstance(task, dict):
             issues.append(f"tasks[{task_index}] must be a JSON object")
@@ -94,6 +102,13 @@ def validate_tasks(
         raw_task_id = task.get("task_id")
         task_id = raw_task_id if isinstance(raw_task_id, str) else ""
         task_label = raw_task_id if isinstance(raw_task_id, str) else f"tasks[{task_index}]"
+        if isinstance(raw_task_id, str):
+            # json/sqlite backends are exclusive, so one task id arriving
+            # twice in one input is a state anomaly worth flagging even if
+            # both copies verify cleanly.
+            if raw_task_id in seen_task_ids:
+                issues.append(f"duplicate task_id {raw_task_id} in input")
+            seen_task_ids.add(raw_task_id)
         events = task.get("adjudications")
         if events is None:
             continue
@@ -117,8 +132,17 @@ def validate_tasks(
                     )
                 seen_ids.add(adjudication_id)
             tag = event.get("audit_hmac")
-            if not isinstance(tag, str):
+            if tag is None:
                 unaudited += 1
+                prev_tag = None
+                continue
+            if not isinstance(tag, str) or len(tag) != 64:
+                # The app only ever persists null or a 64-hex tag, so a
+                # present malformed value is corruption, never "unaudited".
+                issues.append(
+                    f"audit_hmac must be a 64-character string at task {task_label} "
+                    f"index {index} ({id_label})"
+                )
                 prev_tag = None
                 continue
             reviewer_id = event.get("reviewer_id")
@@ -183,7 +207,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.task_id is not None:
-        tasks = [task for task in tasks if isinstance(task, dict) and task.get("task_id") == args.task_id]
+        tasks = [
+            task for task in tasks if isinstance(task, dict) and task.get("task_id") == args.task_id
+        ]
 
     ok, issues, unaudited = validate_tasks(tasks, raw_key.encode("utf-8"))
     for issue in issues:
