@@ -109,6 +109,7 @@ pnpm preview:stop
 ## 改代码前必看的硬约束（测试会卡）
 
 - 后端严格分层：`api/` → `services/` → `repositories/` → `schemas/`，不许跨层（router 不直接读 JSON，service 不 import FastAPI）。router 在 `app/main.py` 接线。
+- network service 是 façade + 子模块结构：`services/network.py` 仅做兼容 re-export（`app/api/network.py` 与测试仍从这里导入），实现按域分布在 `network_common`（轻量公共原语，只依赖 schemas + canonical JSON，防 import cycle）、`network_imports` / `network_lineage` / `network_tasks` / `network_assembly` / `network_adjudication` / `network_queries` 与更早的 `network_providers` / `network_connectors` / `network_omics` / `network_chembl` / `network_open_targets` / `network_external_client`。测试在 façade 模块上 monkeypatch（`_get_repository` / `uuid4` / `select_network_provider`，见 `test_network_service.py`），子模块必须在函数体内 `from app.services import network as _facade` 走调用时解析——写成模块级 import 会静默绕过 monkeypatch；新增网络服务代码先选对子模块归属。
 - CORS 仅放行本机回环 `localhost`/`127.0.0.1` 的 3000 与 3100（3100 对应 `run-internal-preview.ps1 -FrontendPort 3100` 换端口场景），仅 `GET, POST`；加来源或 `PUT`/`DELETE` 路由要改 `app/main.py` 中间件，并同步 `test_cors.py` 的放行+拒绝契约测试。
 - 开放预览也有请求来源边界（2026-09-14）：仅接受回环 Host；Origin 必须是上述前端来源或后端自身来源。CORS 不能代替写入防护，multipart simple request 同样在处理前拒绝外站与 `null` Origin。请求上限按实际流式字节计数，不仅依赖 Content-Length。TestClient 使用回环 base_url；虚构域名仅用于拒绝测试。受 token 保护的部署继续按既有代理/鉴权契约运行。
 - 免责声明字符串 `非诊断结论、需结合临床。` 是 load-bearing，被后端测试、eval、前端断言引用，必须逐字节一致，不要改写 `services/rag.py` 的 `DISCLAIMER`。同族还有 RAG 实体零命中话术：`entity_matched is False` 时输出「未检索到与所问实体直接对应的证据片段」开头（`services/llm/provider.py`，`test_llm_provider.py` 断言），改话术要同步改测试，且不得顺手调检索排序/eval 预期。
@@ -132,7 +133,7 @@ pnpm preview:stop
 - 启动外部进程时传结构化 argv，禁止拼接 `PowerShell -Command` 或 curl config/header 字符串；端口和凭证参数必须先校验。
 - PDF 上传的真实文件 ID 绑定文献、完整文件名和字节 SHA-256，长度受限且旧文件不可覆写；旧 filename-only ID 保持可读兼容。JSON 文献与 chunk 更新按 canonical path 共享进程内锁，并原子替换文件；不承诺跨进程事务。解析/人工状态请求需传当前 `pdf_upload_id`，服务层与三种仓储重验 ID，过期返回 409，禁止把旧解析预览附在新文件上。
 - PDF 流分两步：`POST /api/uploads/pdf` 只落盘并置 `pending`，要单独调 `POST /api/uploads/pdf/auto-parse` 才推进到 `parsed`/`failed`；upload endpoint 不做重解析。
-- 前端测试套件（`frontend/tests/`，45 个测试文件）里有 23 个源码断言测试（`grep -l '\.tsx' frontend/tests/*.test.ts` 可列全，如 `pdf-upload-status`、`literature-detail-meta`、`client-section-consistency`、`page-shell-consistency`、`network-evidence-grading-ui` 等）用 `readFileSync` 对 `.tsx` 源码做正则断言；改页面壳、导航、可见 meta 文案或组件内嵌逻辑时最容易挂这批。
+- 前端测试套件（`frontend/tests/`，47 个测试文件）里有 23 个源码断言测试（`grep -l '\.tsx' frontend/tests/*.test.ts` 可列全，如 `pdf-upload-status`、`literature-detail-meta`、`client-section-consistency`、`page-shell-consistency`、`network-evidence-grading-ui` 等）用 `readFileSync` 对 `.tsx` 源码做正则断言；改页面壳、导航、可见 meta 文案或组件内嵌逻辑时最容易挂这批。
 - 后端 mypy `strict=true` 仅作用于 `app/`（tests 排除）；`B008` 全局忽略，因为 FastAPI 用 `Body()`/`Form()`/`File()`/`Query()` 当默认值。
 - eval 数据集是 50 题（`backend/data/evals/rag_ad_eval_questions.json`），不要按历史文档里的 20 题口径规划。
 - 检索排序预期是调参产物，不是随手可修的失败：改 `services/retrieval/provider.py` 评分（字段加权 title=3/keywords=2/abstract=1、IDF 加权、多字术语词典）、`backend/data/retrieval/cjk_medical_terms.json` 或 `cross_lingual_terms.json` 会改变 citation 排序；`test_rag_service.py`、`test_rag_api.py`、`test_cross_lingual_eval.py` 的预期顺序对应 Track A/A+ 实测基线（MRR@5 0.268）——该基线对应 seed fixture 上的确定性检索，扩展语料只存在于 gitignored runtime state，不进测试语料，测试预期不受 v6 数字影响——调整时必须说明对基线的影响，不得为过测试而抹平排序。
