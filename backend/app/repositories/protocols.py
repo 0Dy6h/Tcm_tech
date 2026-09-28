@@ -7,6 +7,7 @@ abstract interface, not the concrete InMemory/SQLite implementation.
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from app.core.audit_hmac import derive_adjudication_audit_hmac, load_audit_key
 from app.schemas.chunk import LiteratureChunk
 from app.schemas.literature import LiteratureItem, PdfParseResult
 from app.schemas.network import (
@@ -23,6 +24,34 @@ from app.schemas.network import (
     NetworkTaskRecord,
     TaskStatus,
 )
+
+
+def _tag_with_audit_hmac(
+    task_id: str,
+    prior_events: list[NetworkTargetAdjudication],
+    adjudication: NetworkTargetAdjudication,
+) -> NetworkTargetAdjudication:
+    """Attach the server-private audit chain tag when the operator key is set.
+
+    Shared by every backend so the chain rule cannot drift between them. Must
+    run inside the caller's critical section: ``prev`` is the tag of the state
+    the append actually lands on (SQLite recomputes it inside the CAS retry
+    loop, JSON holds the instance lock across the whole write).
+    """
+    key = load_audit_key()
+    if key is None:
+        return adjudication
+    return adjudication.model_copy(
+        update={
+            "audit_hmac": derive_adjudication_audit_hmac(
+                key,
+                task_id,
+                len(prior_events),
+                prior_events[-1].audit_hmac if prior_events else None,
+                adjudication.model_dump(mode="json", exclude={"audit_hmac"}),
+            )
+        }
+    )
 
 
 class LiteratureRepository(Protocol):

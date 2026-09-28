@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import TypeAdapter
 
 from app.core.canonical_json import canonical_json_sha256
+from app.repositories.protocols import _tag_with_audit_hmac
 from app.schemas.network import (
     AnalysisType,
     DataMode,
@@ -189,6 +190,9 @@ class NetworkTaskRepository:
                 record = NetworkTaskRecord.model_validate(existing)
                 if record.owner_id != owner_id:
                     return None
+                # The audit tag must be derived inside the lock so ``prev`` is
+                # the tag of the state this append actually lands on.
+                adjudication = _tag_with_audit_hmac(task_id, record.adjudications, adjudication)
                 next_record = record.model_copy(
                     update={"adjudications": [*record.adjudications, adjudication]}
                 )

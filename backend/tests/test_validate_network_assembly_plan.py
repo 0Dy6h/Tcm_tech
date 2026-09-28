@@ -192,7 +192,10 @@ def _run_flow(client: TestClient) -> tuple[dict[str, object], str, str]:
     record = get_network_task_repository().get_owned(child_id, "local-preview")
     assert record is not None
     adjudications = [
-        event.model_dump(mode="json", exclude={"reviewer_id"}) for event in record.adjudications
+        # Server-private fields never ride in the public package: reviewer
+        # identity by contract §6.2, the audit chain tag by the same slice.
+        event.model_dump(mode="json", exclude={"reviewer_id", "audit_hmac"})
+        for event in record.adjudications
     ]
     return (
         {
@@ -652,3 +655,19 @@ def test_validator_continues_output_checks_when_payload_is_malformed() -> None:
     # The deliberately broken output_id must still be caught: payload failure
     # degrades to payload=None, it never aborts the remaining checks.
     assert any("output.output_id does not derive" in issue for issue in issues), issues
+
+
+def test_validator_still_accepts_packages_from_audited_streams(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit tagging (consumption contract §6.2 slice) must stay invisible to
+    the public evidence package: server-private HMACs never ride in it, and
+    the validator's snapshot recompute is unaffected by tagged streams."""
+    monkeypatch.setenv("QIYAN_ADJUDICATION_AUDIT_KEY", "a" * 64)
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+
+    assert evidence["adjudications"], "flow must produce adjudication events"
+    assert all("audit_hmac" not in event for event in evidence["adjudications"])
+    ok, issues = validate(evidence)
+    assert ok, issues

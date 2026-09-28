@@ -556,6 +556,9 @@ class NetworkTargetAdjudication(BaseModel):
     omics_canonical_symbol: str | None = Field(default=None, min_length=1, max_length=40)
     omics_log2fc: float | None = None
     omics_adj_p_value: float | None = Field(default=None, ge=0, le=1)
+    # Server-private chained audit tag (QIYAN_ADJUDICATION_AUDIT_KEY); like
+    # reviewer_id it is persisted but never projected to any API surface.
+    audit_hmac: str | None = Field(default=None, min_length=64, max_length=64)
 
     @model_validator(mode="after")
     def validate_omics_confirmation_fields(self) -> Self:

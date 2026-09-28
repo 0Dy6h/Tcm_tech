@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import TypeAdapter
 
 from app.core.canonical_json import canonical_json_sha256
+from app.repositories.protocols import _tag_with_audit_hmac
 from app.schemas.network import (
     AnalysisType,
     DataMode,
@@ -492,6 +493,11 @@ class SqliteNetworkTaskRepository:
                     return None
                 record = _row_to_record(row)
                 observed_adjudications = row["adjudications"]
+                # Audit tag derivation sits inside the CAS retry loop so the
+                # chain links to the adjudications column version this write
+                # actually lands on, not to a snapshot a concurrent writer
+                # already extended.
+                adjudication = _tag_with_audit_hmac(task_id, record.adjudications, adjudication)
                 adjudications_json = json.dumps(
                     [
                         item.model_dump(mode="json")
