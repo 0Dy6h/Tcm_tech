@@ -182,7 +182,7 @@ def _adjudication_latest_snapshot(
 
     Sorted by lineage row id; every entry carries its adjudication_id (whose
     derivation contains a random nonce), so any adjudication append changes
-    the snapshot hash — that is     the R6 binding of the consumption contract.
+    the snapshot hash — that is the R6 binding of the consumption contract.
     """
     from app.services import network as _facade
 

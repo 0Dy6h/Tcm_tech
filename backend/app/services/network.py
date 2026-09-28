@@ -11,6 +11,18 @@ resolve those names through this façade at call time (function-body
 ``from app.services import network as _facade`` late binding) instead of
 binding the original objects at import time — a module-level import would
 silently defeat the monkeypatches.
+
+Convention, enforced by ``tests/test_network_facade_late_binding.py``:
+
+- No sibling imports this façade at module level (import cycle plus
+  monkeypatch bypass).
+- The patchable names are never called bare in a sibling; they are always
+  resolved as ``_facade.<name>``.
+- Cross-references between split siblings also go through ``_facade.``
+  (even for names outside the monkeypatch surface) so the whole call graph
+  stays monkeypatch-transparent.  The one module-level exception is
+  network_common: dependency-light primitives that import no sibling and
+  are outside the monkeypatch surface.
 """
 
 from typing import TYPE_CHECKING
