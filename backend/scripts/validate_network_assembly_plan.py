@@ -16,8 +16,19 @@ Evidence package (JSON):
         {"adjudication_id": "...", "lineage_row_id": "...",
          "decision": "...", "reason": "...|null", "decided_at": "..."}
       ],
-      "raw_artifact_dir": "optional path to the server raw-artifact store"
+      "raw_artifact_dir": "optional path to the server raw-artifact store",
+
+      "outputs": [ { ... NetworkAssemblyOutput JSON ... } ],
+      "consumptions": [ { ... NetworkAssemblyConsumptionRecord JSON ...
+                          (owner_id included: owner-scoped audit field) } ],
+      "output_payload": { ... writer payload; enables output_sha256 recompute }
     }
+
+The output/consumption fields extend the package to the writer consumption
+contract (decision D9=B, deferred slice): the output envelope, the exactly-once
+consumption binding and the structural honesty of the assembled chains are
+re-verified independently. All three fields are optional; a plan-only package
+stays valid.
 
 The package intentionally excludes reviewer identity: this is the public
 consistency path. Privileged audit of reviewer identity is a separate slice.
@@ -36,7 +47,9 @@ from typing import Any
 _PLAN_ID_PATTERN = re.compile(r"^assembly-plan-[0-9a-f]{64}$")
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _ROW_ID_PATTERN = re.compile(r"^(disease|compound|intersection)-[0-9a-f]{64}$")
+_CONSUMPTION_ID_PATTERN = re.compile(r"^assembly-consumption-[0-9a-f]{64}$")
 _TERMINAL_DECISIONS = {"included", "excluded"}
+_DISCLAIMER = "非诊断结论、需结合临床。"
 
 
 def _canonical_sha256(payload: Any) -> str:
@@ -150,6 +163,182 @@ def _recompute_selected_intersections(
             }
         )
     return selected
+
+
+def _validate_output_envelope(
+    output: dict[str, Any],
+    plan: dict[str, Any],
+    payload: Any,
+    issues: list[str],
+) -> None:
+    if output.get("assembly_input_ready") is not True:
+        issues.append("output.assembly_input_ready must be true")
+    if output.get("formal_network_ready") is not False:
+        issues.append("output.formal_network_ready must be false")
+    for field in (
+        "task_id",
+        "source_task_id",
+        "plan_id",
+        "plan_sequence",
+        "canonical_plan_input_sha256",
+    ):
+        if output.get(field) != plan.get(field):
+            issues.append(f"output.{field} does not match plan.{field}")
+    output_hash = output.get("output_sha256")
+    derived_id = "assembly-output-" + _canonical_sha256(
+        {
+            "task_id": output.get("task_id"),
+            "source_task_id": output.get("source_task_id"),
+            "plan_id": output.get("plan_id"),
+            "plan_sequence": output.get("plan_sequence"),
+            "canonical_plan_input_sha256": output.get("canonical_plan_input_sha256"),
+            "output_sha256": output_hash,
+        }
+    )
+    if output.get("output_id") != derived_id:
+        issues.append("output.output_id does not derive from its binding fields")
+    if output.get("disclaimer") != _DISCLAIMER:
+        issues.append("output.disclaimer must be the exact product disclaimer")
+    # chains/warnings are deliberately outside the hash domain (2026-09-11
+    # decision): only the writer payload keys output_sha256.
+    if payload is not None and output_hash != _canonical_sha256(payload):
+        issues.append("output.output_sha256 does not match the provided output_payload")
+
+
+def _validate_output_chains(
+    output: dict[str, Any],
+    selected: list[dict[str, Any]],
+    issues: list[str],
+) -> None:
+    selections = {item.get("lineage_row_id"): item for item in selected if isinstance(item, dict)}
+    for index, chain in enumerate(_rows(output.get("chains"), "output.chains")):
+        if chain.get("herb") != "":
+            issues.append(f"output chain herb must be empty (chain {index})")
+        if chain.get("formula") is not None:
+            issues.append(f"output chain formula must be null (chain {index})")
+        evidence_type = chain.get("target_evidence_type")
+        if evidence_type not in {"predicted", "mock"}:
+            issues.append(
+                f"output chain target_evidence_type must be predicted or mock (chain {index})"
+            )
+        level = chain.get("evidence_level")
+        # Assembly honesty: verified rows stay predicted (known_activity never
+        # floats to experimental, no literature refs), mock rows stay mock_inferred.
+        if evidence_type == "mock" and level != "mock_inferred":
+            issues.append(
+                f"output chain evidence grading violates the assembly policy (chain {index})"
+            )
+        if evidence_type == "predicted" and (level != "predicted" or chain.get("evidence_refs")):
+            issues.append(
+                f"output chain evidence grading violates the assembly policy (chain {index})"
+            )
+        related = chain.get("related_entity_ids")
+        related_ids = (
+            {item for item in related if isinstance(item, str)}
+            if isinstance(related, list)
+            else set()
+        )
+        selection = (
+            selections.get(related[0])
+            if isinstance(related, list) and related and isinstance(related[0], str)
+            else None
+        )
+        if selection is None:
+            issues.append(
+                f"output chain does not reference a plan-selected intersection (chain {index})"
+            )
+            continue
+        if chain.get("target") != selection.get("canonical_symbol"):
+            issues.append(
+                f"output chain target does not match the referenced selected intersection (chain {index})"
+            )
+        disease_ids = set(selection.get("selected_disease_lineage_row_ids") or [])
+        compound_ids = set(selection.get("selected_compound_lineage_row_ids") or [])
+        if not disease_ids <= related_ids:
+            issues.append(
+                f"output chain is missing selected disease lineage row references (chain {index})"
+            )
+        if not compound_ids & related_ids:
+            issues.append(
+                f"output chain is missing the selected compound lineage row reference (chain {index})"
+            )
+
+
+def _validate_consumptions(
+    consumptions: list[dict[str, Any]],
+    outputs: list[dict[str, Any]],
+    plan: dict[str, Any],
+    issues: list[str],
+) -> None:
+    outputs_by_id = {item.get("output_id"): item for item in outputs if isinstance(item, dict)}
+    seen: set[tuple[Any, Any, Any]] = set()
+    consumed_output_ids: set[str] = set()
+    for index, consumption in enumerate(consumptions):
+        record = f"record {index}"
+        consumption_id = consumption.get("consumption_id")
+        if not isinstance(consumption_id, str) or not _CONSUMPTION_ID_PATTERN.fullmatch(
+            consumption_id
+        ):
+            issues.append(
+                f"consumption.consumption_id must match assembly-consumption-<sha256> ({record})"
+            )
+        for field in ("task_id", "plan_id", "plan_sequence", "canonical_plan_input_sha256"):
+            if consumption.get(field) != plan.get(field):
+                issues.append(f"consumption.{field} does not match plan.{field} ({record})")
+        owner_id = consumption.get("owner_id")
+        if not isinstance(owner_id, str) or not owner_id:
+            issues.append(f"consumption.owner_id must not be empty ({record})")
+        output_id = consumption.get("output_id")
+        output = outputs_by_id.get(output_id) if isinstance(output_id, str) else None
+        if output is None:
+            issues.append(f"consumption.output_id does not reference a sealed output ({record})")
+        else:
+            for field in (
+                "task_id",
+                "plan_id",
+                "plan_sequence",
+                "canonical_plan_input_sha256",
+                "output_sha256",
+                "writer_id",
+                "consumed_at",
+            ):
+                if consumption.get(field) != output.get(field):
+                    issues.append(
+                        f"consumption.{field} does not match the referenced output ({record})"
+                    )
+            consumed_output_ids.add(str(output_id))
+        key = (consumption.get("task_id"), owner_id, consumption.get("plan_id"))
+        if key in seen:
+            issues.append(
+                f"consumption violates exactly-once: duplicate (task_id, owner_id, plan_id) ({record})"
+            )
+        seen.add(key)
+    for output in outputs:
+        output_id = output.get("output_id")
+        if str(output_id) not in consumed_output_ids:
+            issues.append(f"output has no consumption record: {output_id}")
+
+
+def _validate_outputs_and_consumptions(
+    evidence: dict[str, Any],
+    plan: dict[str, Any],
+    issues: list[str],
+) -> None:
+    raw_outputs = evidence.get("outputs")
+    raw_consumptions = evidence.get("consumptions")
+    if raw_outputs is None and raw_consumptions is None:
+        return
+    outputs = _rows(raw_outputs, "outputs") if raw_outputs is not None else []
+    consumptions = _rows(raw_consumptions, "consumptions") if raw_consumptions is not None else []
+    payload = evidence.get("output_payload")
+    if payload is not None:
+        payload = _object(payload, "output_payload")
+    plan_selected = plan.get("selected_intersections")
+    selected = plan_selected if isinstance(plan_selected, list) else []
+    for output in outputs:
+        _validate_output_envelope(output, plan, payload, issues)
+        _validate_output_chains(output, selected, issues)
+    _validate_consumptions(consumptions, outputs, plan, issues)
 
 
 def validate(evidence: dict[str, Any]) -> tuple[bool, list[str]]:
@@ -286,6 +475,9 @@ def validate(evidence: dict[str, Any]) -> tuple[bool, list[str]]:
             issues.append(
                 "expected: " + json.dumps(recomputed_selected, ensure_ascii=False, sort_keys=True)
             )
+
+    # Writer consumption contract (D9=B): output envelope + consumption binding.
+    _validate_outputs_and_consumptions(evidence, plan, issues)
 
     # Canonical plan input and idempotent plan id.
     if not isinstance(plan_selected, list) or not plan_selected:

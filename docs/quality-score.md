@@ -8,10 +8,10 @@
 | 领域 | 评分 | 缺口 | 最后更新 |
 |------|------|------|---------|
 | 产品需求 | C | 主轴已纠偏，双侧 artifact workflow、逐行判定与候选装配计划已具备工程能力；但尚无真人判定、真实最小科研闭环与组学验证 | 2026-08-15 |
-| 技术架构 | B | 分层、安全、immutable snapshot、双 manifest、双 hash、lineage、独立复算、append-only adjudication 与 assembly plan 已落地；writer 消费契约、PG parity 与多 worker claim 仍未完成 | 2026-08-15 |
-| 任务拆解 | B | 0017 Gate 2、adjudication 与 source-bound 装配门禁已收口；下一步为 writer 消费契约、PG parity 与真人 reviewer 判定；组学数据层仅方向规划（ADR-0018） | 2026-08-15 |
+| 技术架构 | B | 分层、安全、immutable snapshot、双 manifest、双 hash、lineage、独立复算、append-only adjudication、assembly plan 与 writer 消费契约（消费原语+装配计算+输出独立 validator）已落地；PG parity 与多 worker claim 仍未完成 | 2026-09-28 |
+| 任务拆解 | B | 0017 Gate 2、adjudication、source-bound 装配门禁与 writer 消费契约（D1-D9 全部落地区含 D9 validator）已收口；下一步为真人 reviewer 判定与真实数据闭环；组学层 G3 切片已落地 | 2026-09-28 |
 | 前端设计 | A | `/network` 支持双侧 artifact 上传、immutable child task、三集合审计表、adjudication 与装配计划面板；既有页面壳与可访问性门禁保持全绿 | 2026-08-15 |
-| 后端 API | B | strict multipart、双 manifest、双 hash、owner-scoped lineage/adjudication/assembly-plan API 与 fail-closed readiness 已落地；writer 消费契约与科学复核仍未完成 | 2026-08-15 |
+| 后端 API | B | strict multipart、双 manifest、双 hash、owner-scoped lineage/adjudication/assembly-plan/consume API 与 fail-closed readiness 已落地（含输出信封独立 validator）；科学复核（真人判定）仍未完成 | 2026-09-28 |
 | 合规 | A | 免责声明、mock 边界、reviewer 访问边界、客户端未验证路径、`server_verified_raw_artifact` 中间态与组学数据默认不外发边界均明确 | 2026-08-15 |
 | 领域文档 | B | ADR-0017、ADR-0018、双侧 artifact guide、整改工作区与 handoff 已建立；EMNLP 论文产出等历史方向材料待归档 | 2026-08-15 |
 | 科研就绪度 | D | 工程 provenance、判定与装配计划均可用，但无真人判定记录；`formal_network_ready` 恒 false；真实组学验证尚未实现 | 2026-08-15 |

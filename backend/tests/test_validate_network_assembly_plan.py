@@ -110,8 +110,14 @@ def _isolate_network_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     clear_network_task_repository_cache()
 
 
-def _build_evidence(client: TestClient) -> dict[str, object]:
-    """Run the real API flow and assemble a public evidence package."""
+WRITER_OUTPUT_PAYLOAD = {
+    "format": "qiyan-assembly-writer-v1",
+    "edges": [{"source": "Quercetin", "target": "IL6", "weight": 0.75}],
+}
+
+
+def _run_flow(client: TestClient) -> tuple[dict[str, object], str, str]:
+    """Run the real API flow; return the evidence package plus child/plan ids."""
     disease_response = client.post(
         "/api/network/disease-import/verify",
         data={
@@ -173,13 +179,46 @@ def _build_evidence(client: TestClient) -> dict[str, object]:
     adjudications = [
         event.model_dump(mode="json", exclude={"reviewer_id"}) for event in record.adjudications
     ]
+    return (
+        {
+            "plan": plan,
+            "child_result": child_result,
+            "parent_protocol": parent_payload["result"]["research_protocol"],
+            "child_protocol": child_result["research_protocol"],
+            "adjudications": adjudications,
+            "raw_artifact_dir": os.environ["NETWORK_RAW_ARTIFACT_DIR"],
+        },
+        child_id,
+        plan["plan_id"],
+    )
+
+
+def _build_evidence(client: TestClient) -> dict[str, object]:
+    """Run the real API flow and assemble a public evidence package."""
+    return _run_flow(client)[0]
+
+
+def _build_consumed_evidence(client: TestClient) -> dict[str, object]:
+    """Seal a plan through the API, consume it, and extend the package."""
+    evidence, child_id, plan_id = _run_flow(client)
+    consume = client.post(
+        f"/api/network/result/{child_id}/assembly-plans/{plan_id}/consume",
+        json={"writer_id": "assembly-writer-1", "output_payload": WRITER_OUTPUT_PAYLOAD},
+    )
+    assert consume.status_code == 201, consume.text
+    accepted = consume.json()
+    consumptions = [
+        item.model_dump(mode="json")
+        for item in get_network_task_repository().list_assembly_consumptions(
+            child_id, "local-preview"
+        )
+    ]
+    assert len(consumptions) == 1
     return {
-        "plan": plan,
-        "child_result": child_result,
-        "parent_protocol": parent_payload["result"]["research_protocol"],
-        "child_protocol": child_result["research_protocol"],
-        "adjudications": adjudications,
-        "raw_artifact_dir": os.environ["NETWORK_RAW_ARTIFACT_DIR"],
+        **evidence,
+        "outputs": [accepted["output"]],
+        "consumptions": consumptions,
+        "output_payload": WRITER_OUTPUT_PAYLOAD,
     }
 
 
@@ -311,5 +350,139 @@ def test_validator_never_requires_reviewer_identity_in_the_public_package() -> N
 
     assert "reviewer_id" not in json.dumps(evidence["adjudications"])
     assert "reviewer_id" not in json.dumps(evidence["plan"])
+    ok, issues = validate(evidence)
+    assert ok, issues
+
+
+def test_validator_accepts_consumed_output_envelope_and_consumption_bindings() -> None:
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+    output = evidence["outputs"][0]
+    assert output["chains"], "fixture flow must produce assembled chains"
+
+    ok, issues = validate(evidence)
+
+    assert ok, issues
+    assert issues == []
+
+
+def test_validator_rejects_every_tampered_output_binding() -> None:
+    client = TestClient(app)
+    evidence = _build_consumed_evidence(client)
+    non_intersection_row_id = evidence["child_result"]["target_lineage"]["disease_targets"][0][
+        "lineage_row_id"
+    ]
+
+    def with_output(**changes: object) -> dict[str, object]:
+        mutated = deepcopy(evidence)
+        mutated["outputs"] = [{**evidence["outputs"][0], **changes}]
+        return mutated
+
+    def with_chain(**changes: object) -> dict[str, object]:
+        mutated = deepcopy(evidence)
+        mutated["outputs"] = [
+            {
+                **evidence["outputs"][0],
+                "chains": [{**evidence["outputs"][0]["chains"][0], **changes}],
+            }
+        ]
+        return mutated
+
+    def with_consumption(index: int, **changes: object) -> dict[str, object]:
+        mutated = deepcopy(evidence)
+        mutated["consumptions"] = [
+            {**item, **changes} if position == index else item
+            for position, item in enumerate(evidence["consumptions"])
+        ]
+        return mutated
+
+    duplicate = deepcopy(evidence)
+    duplicate["consumptions"] = [
+        *evidence["consumptions"],
+        {**evidence["consumptions"][0], "consumption_id": "assembly-consumption-" + "1" * 64},
+    ]
+    orphan_output = deepcopy(evidence)
+    orphan_output["consumptions"] = []
+    tampered_payload = deepcopy(evidence)
+    tampered_payload["output_payload"] = {
+        **WRITER_OUTPUT_PAYLOAD,
+        "edges": [{"source": "Quercetin", "target": "IL6", "weight": 0.9}],
+    }
+
+    mutations: list[tuple[str, dict[str, object]]] = [
+        (
+            "output.output_id does not derive",
+            with_output(output_id="assembly-output-" + "0" * 64),
+        ),
+        (
+            "output.output_sha256 does not match the provided output_payload",
+            with_output(output_sha256="0" * 64),
+        ),
+        (
+            "output.plan_sequence does not match plan.plan_sequence",
+            with_output(plan_sequence=evidence["outputs"][0]["plan_sequence"] + 1),
+        ),
+        (
+            "output.canonical_plan_input_sha256 does not match plan.canonical_plan_input_sha256",
+            with_output(canonical_plan_input_sha256="0" * 64),
+        ),
+        (
+            "output.output_sha256 does not match the provided output_payload",
+            tampered_payload,
+        ),
+        (
+            "output.disclaimer",
+            with_output(disclaimer="仅供参考。"),
+        ),
+        (
+            "output.formal_network_ready must be false",
+            with_output(formal_network_ready=True),
+        ),
+        (
+            "output chain herb must be empty",
+            with_chain(herb="消风散"),
+        ),
+        (
+            "output chain does not reference a plan-selected intersection",
+            with_chain(related_entity_ids=[non_intersection_row_id, "d", "e"]),
+        ),
+        (
+            "output chain evidence grading",
+            with_chain(target_evidence_type="mock", evidence_level="predicted"),
+        ),
+        (
+            "output chain evidence grading",
+            with_chain(evidence_level="experimental"),
+        ),
+        (
+            "exactly-once",
+            duplicate,
+        ),
+        (
+            "consumption.output_id does not reference a sealed output",
+            with_consumption(0, output_id="assembly-output-" + "2" * 64),
+        ),
+        (
+            "consumption.output_sha256 does not match the referenced output",
+            with_consumption(0, output_sha256="0" * 64),
+        ),
+        (
+            "output has no consumption record",
+            orphan_output,
+        ),
+    ]
+
+    for expected_issue, mutated in mutations:
+        ok, issues = validate(mutated)
+        assert not ok, f"expected validator to reject: {expected_issue}"
+        assert any(expected_issue in issue for issue in issues), (expected_issue, issues)
+
+
+def test_validator_ignores_output_fields_only_when_the_package_omits_them() -> None:
+    """Plan-only packages (existing shape) must stay valid."""
+    client = TestClient(app)
+    evidence = _build_evidence(client)
+
+    assert "outputs" not in evidence
     ok, issues = validate(evidence)
     assert ok, issues
