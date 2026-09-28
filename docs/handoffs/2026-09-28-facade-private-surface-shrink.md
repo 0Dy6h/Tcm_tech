@@ -1,8 +1,10 @@
 # Handoff — façade 私有面收缩：网络服务导入面收敛到兄弟模块（2026-09-28）
 
-## 背景
+## 背景与当日上下文
 
-同日 `/review`（9-28 network 拆分收口）遗留的 🟡 项「私有面固化」：拆分后 `services/network.py` 仍以 69 名字的 `__all__` 充当事实公共导入面，`app/api/network.py` 与测试全部从 façade 导入。本切片按 handoff 待拍板候选 #1 执行（自主交接口径：纯工程、零产品决策、门禁+走查+收工全口径）。
+本日第三次会话，执行前一份 handoff「待拍板候选 #1」（自主交接口径：纯工程、零产品决策、门禁+走查+收工全口径）。同日时间线：日间 network 拆分收口（见 `2026-09-28-network-facade-split-closeout.md`）→ 本切片（6532ca8）→ /review 整改（1896cac，见下方整改节）。
+
+溯源备注：当日早些时候 /init 维护 AGENTS.md 时实测 tcmtech 三份 shim 已从本机消失（`~/bin` 为空、`where tcmtech` 无结果、无 handoff 记录移除），已在 AGENTS.md 命令段加「当前不可用+替代路径」注记——该编辑未单独成笔，随本切片 6532ca8 的 AGENTS.md 修改一并入库（提交信息未单列，特此溯源）。
 
 ## 落地（TDD：守护断言先红后绿）
 
